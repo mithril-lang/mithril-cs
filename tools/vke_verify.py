@@ -5,7 +5,7 @@ takes over an extant/expired holder. No node/PVC/provider purchase or authority
 handoff. Runtime source, quotas, complete inventory and terminal outcomes are
 read back. Evidence remains in retained Job logs until qualified cloud custody.
 """
-import argparse, base64, datetime, hashlib, json, re, shlex, subprocess, time, uuid, urllib.parse
+import argparse, base64, datetime, hashlib, io, json, re, shlex, subprocess, tarfile, time, uuid, urllib.parse
 
 REPO = "mithril-lang/mithril-cs"
 NS = "mithril-cs-ci"
@@ -88,16 +88,31 @@ def main():
     need(commit["sha"] == args.source, "commit identity")
     tree = gh("git/trees/" + commit["tree"]["sha"] + "?recursive=1")
     need(not tree.get("truncated"), "source tree truncated")
-    files = {}
+    expected = {}
     for row in tree["tree"]:
         if row["type"] == "tree": continue
         need(row["mode"] == "100644" and row["type"] == "blob"
              and re.fullmatch("[A-Za-z0-9_./-]+", row["path"])
              and ".." not in row["path"].split("/"), "unsupported source entry")
-        blob = gh("git/blobs/" + row["sha"])
-        raw = base64.b64decode(blob["content"])
-        need(hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == row["sha"], "source blob mismatch")
-        files[row["path"]] = raw.decode("utf-8")
+        expected[row["path"]] = row["sha"]
+    acquired = subprocess.run(["gh","api","repos/"+REPO+"/tarball/"+args.source],
+                              capture_output=True, timeout=45)
+    need(acquired.returncode == 0 and len(acquired.stdout) <= 2*1024*1024, "source archive acquisition")
+    files = {}
+    with tarfile.open(fileobj=io.BytesIO(acquired.stdout), mode="r:gz") as archive:
+        count = 0
+        for member in archive:
+            count += 1
+            need(count <= 256, "source archive entry budget")
+            if member.isdir(): continue
+            path = member.name.split("/",1)[-1]
+            need(member.isfile() and path in expected and path not in files
+                 and member.size <= 512*1024, "source archive entry")
+            raw = archive.extractfile(member).read(512*1024+1)
+            need(hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\\0"+raw).hexdigest() == expected[path],
+                 "source blob mismatch")
+            files[path] = raw.decode("utf-8")
+    need(set(files) == set(expected), "incomplete source archive")
     need(len(files) <= 64 and sum(len(v.encode()) for v in files.values()) <= 512 * 1024, "source budget")
     policy = json.load(open(args.baseline))
     old_rows = policy["platform_pods"]
@@ -211,7 +226,7 @@ def main():
                "value":-10,"globalDefault":False,"preemptionPolicy":"Never",
                "description":"Bounded low-priority CS qualification; never preempts existing work"}
         priority = kube("create","-f","-","-o","json",body=obj)
-    need(priority.get("value")==-10 and priority.get("globalDefault") is False
+    need(priority.get("value")==-10 and priority.get("globalDefault", False) is False
          and priority.get("preemptionPolicy")=="Never", "priority class drift")
     ledger = {"operation":operation,"source":args.source,"phase":"pre-submit","job":name,"image":BB,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
     journal = {"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name+"-journal","namespace":NS},"data":{"state":json.dumps(ledger)}}
