@@ -4,9 +4,9 @@
 
 | Product capability | Current implementation | Next owning work |
 | --- | --- | --- |
-| Autonomous pentesting | Policy/run/evidence core; no active sandbox or model planner | MITHRIL-2467: verified grants, bounded executor, test-identity and reproduction fixtures |
+| Autonomous pentesting | Bounded deterministic in-process IDOR reproduction; no live sandbox or model planner | MITHRIL-2467: verified grants, bounded executor, test-identity and reproduction fixtures |
 | PR reviews | Local source candidates only; no GitHub permissions, Checks or PR access | MITHRIL-2203 / 2204: exact commit-object acquisition and authenticated translation adapter |
-| Auto-Fix | Architectural contract only | MITHRIL-2468 / 2205: evidence-bound proposals, independent review, trusted PR creation and retest |
+| Auto-Fix | Evidence-bound controlled-fixture patch proposal, review admission and retest | MITHRIL-2468 / 2205: evidence-bound proposals, independent review, trusted PR creation and retest |
 | Continuous coverage | No scheduler, event receiver or durable deduplication | MITHRIL-2469: authenticated triggers, transactional deduplication, fencing, recovery |
 | Infrastructure | No provider credentials or inventory adapter | MITHRIL-2470: least-privilege read inventory first, scope/egress validation |
 | Public UX | Separate Fund candidate PR2482 / Figma Grid dark + Porcelain light | MITHRIL-2466 / 2465; source integration and release remain separate |

@@ -55,3 +55,10 @@ Review immediately after an isolation, stale-owner, data-loss or duplicate-side-
 ## Transition / reversibility
 
 No live owner, service, datastore, grant authority or traffic changes. Existing Python engine and Fund integration remain active under their current owners. A future service cutover requires source-bound translation verification, one authority per stage, fencing/unknown-outcome recovery tests, source/evidence integrity read-back and rollback. Keep this initial adapter independently removable.
+
+
+## Controlled assessment and repair extension
+
+A deterministic CLJC planner now executes four typed probes against the bundled, in-process synthetic IDOR target: owner, cross-tenant actor, anonymous actor and absent-object negative control. Every probe passes the grant/revocation/cancellation/budget gate. The fixture source SHA256 and revision bind all evidence; only successful controls plus actual foreign-object disclosure yield reproduced-in-controlled-fixture evidence. No sockets, arbitrary target or model tools are admitted.
+
+Auto-Fix proposes the exact synthetic configuration change, binds before/after digests, base revision, target and reproduced evidence, requires a review bound to the entire proposal, and applies only to a new in-memory fixture. The same assessment reruns against the patched digest. No file, PR, merge or deployment operation exists. Test reviewer identities are synthetic fixtures, not verified human/service identities. Live signed review, Git immutable-source acquisition, privileged patch publication and executor containment remain separate gates.

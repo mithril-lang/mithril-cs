@@ -3,9 +3,9 @@
 
 (def capabilities
   {:source-review :implemented
-   :autonomous-pentesting :planned
+   :autonomous-pentesting :controlled-fixture-only
    :pr-reviews :adapter-required
-   :auto-fix :planned
+   :auto-fix :controlled-fixture-only
    :continuous-coverage :planned
    :infrastructure :planned})
 
@@ -18,7 +18,7 @@
 (defn validate-grant [grant now]
   (cond
     (not (every? identifier? ((juxt :id :tenant :project :target) grant))) :invalid-identity
-    (not= :source-review (:operation grant)) :unsupported-operation
+    (not (contains? #{:source-review :fixture-pentest} (:operation grant))) :unsupported-operation
     (not (and (positive-int? now) (positive-int? (:expires-at grant)))) :invalid-clock
     (<= (:expires-at grant) now) :expired
     (not= true (:authorized? grant)) :not-authorized
