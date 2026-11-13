@@ -244,7 +244,7 @@ class Operator:
             raw=socket.create_connection(("100.92.127.42",6443),5);raw.settimeout(8)
             with ctx.wrap_socket(raw,server_hostname="17f3e901-5f9e-4928-9115-b2e8a2446f25.vultr-k8s.com") as tls:
                 headers="Authorization: "+auth+"\r\n" if auth else ""
-                tls.sendall(("GET /version HTTP/1.1\r\nHost: 17f3e901-5f9e-4928-9115-b2e8a2446f25.vultr-k8s.com\r\n"+headers+"Connection: close\r\n\r\n").encode())
+                tls.sendall(("GET /api/v1/nodes HTTP/1.1\r\nHost: 17f3e901-5f9e-4928-9115-b2e8a2446f25.vultr-k8s.com\r\n"+headers+"Connection: close\r\n\r\n").encode())
                 status=int(tls.recv(4096).split(b" ",2)[1]);need(status==expected,"native authorization denial mismatch")
         old=self.get("Lease",OWNER,LNS);time.sleep(6);new=self.get("Lease",OWNER,LNS)
         need(new["metadata"]["uid"]==plan["old_policy"]["owner_lease_uid"] and
