@@ -10,6 +10,7 @@ class HTTPContracts(unittest.TestCase):
   class Target(http.server.BaseHTTPRequestHandler):
    def log_message(self,*_):pass
    def do_GET(self):
+    self.server.last_user_agent=self.headers.get("User-Agent")
     hits.append(self.path)
     if self.path=="/app/redirect":
      self.send_response_only(302);self.send_header("Location","/outside");body=b"redirect"
@@ -30,6 +31,7 @@ class HTTPContracts(unittest.TestCase):
   r=fetch(self.url+"/app/","reviewed-1","passive",5)
   self.assertEqual(r["headers"]["content-security-policy"],"default-src 'none'")
   self.assertEqual(r["body"],"Mithril's response 日本語")
+  self.assertEqual(self.server.last_user_agent,"Mithril-CS/0.1 (+https://cs.mithril.fund; passive-security-check)")
  def test_edn_envelope_and_string_headers(self):
   out=response_edn({"status":200,"headers":{"content-security-policy":"default-src 'none'"},"body":"Mithril's"})
   self.assertTrue(out.startswith('{:status 200 :headers {"content-security-policy"'))
