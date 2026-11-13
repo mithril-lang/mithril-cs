@@ -29,4 +29,4 @@
                       ",\"http_status_counts\":{"
                       (strings/join "," (for [[status n] (frequencies (map :status pages))]
                                           (str "\"" status "\":" n))) "}}"))
-               (pr-str doc))))))
+               (pr-str doc)))))
