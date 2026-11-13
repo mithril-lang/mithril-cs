@@ -1,0 +1,116 @@
+;; ZAP -> CWE mapping matrix (MITHRIL-2448).
+;; Implemented rows mirror resources/zap_proxy/rules/rules.edn 1:1.
+;; Open-gap rows are ZAP release families with no Mithril rule yet.
+;; Deepening merges through 2026-11-14 have already covered:
+;;   - security headers variants (HSTS/CSP/XCTO/XFO/Referrer-Policy/
+;;     Permissions-Policy/COOP/COEP/CORP presence + weak values)
+;;   - CORS wildcard+credentials (10038/CWE-942)
+;;   - cache privacy (10010/CWE-538), Refresh/Location (10038/CWE-693/601)
+;;   - directory listing (10027/CWE-209), version headers (Server /
+;;     X-Powered-By / Via / X-AspNet-Version / X-Generator, 10027/CWE-209)
+;;   - cookie __Host-/__Secure- prefix (10010/CWE-1004)
+;;   - traversal/LFI encoded variants (file:///etc/passwd, %c0%af, doubled)
+;;   - SQLi error IOC dialects (PostgreSQL / SQLite / MSSQL)
+;; Rows below are what remains, grouped by category (not per-alert id).
+{:implemented
+ [{:rule-id "10038" :zap "10038" :cwe "CWE-693" :kind :passive}
+  {:rule-id "10010" :zap "10010" :cwe "CWE-1004" :kind :passive}
+  {:rule-id "10027" :zap "10027" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40029" :zap "40029" :cwe "CWE-94" :kind :passive}
+  {:rule-id "40030" :zap "40030" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40031" :zap "40031" :cwe "CWE-538" :kind :passive}
+  {:rule-id "40032" :zap "40032" :cwe "CWE-538" :kind :passive}
+  {:rule-id "40033" :zap "40033" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40034" :zap "40034" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40035" :zap "40035" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40036" :zap "40036" :cwe "CWE-359" :kind :passive}
+  {:rule-id "40037" :zap "40037" :cwe "CWE-359" :kind :passive}
+  {:rule-id "40038" :zap "40038" :cwe "CWE-359" :kind :passive}
+  {:rule-id "40039" :zap "40039" :cwe "CWE-359" :kind :passive}
+  {:rule-id "40040" :zap "40040" :cwe "CWE-200" :kind :passive}
+  {:rule-id "40041" :zap "40041" :cwe "CWE-200" :kind :passive}
+  {:rule-id "40042" :zap "40042" :cwe "CWE-798" :kind :passive}
+  {:rule-id "40043" :zap "40043" :cwe "CWE-798" :kind :passive}
+  {:rule-id "40044" :zap "40044" :cwe "CWE-798" :kind :passive}
+  {:rule-id "40045" :zap "40045" :cwe "CWE-1004" :kind :passive}
+  {:rule-id "40046" :zap "40046" :cwe "CWE-1004" :kind :passive}
+  {:rule-id "40047" :zap "40047" :cwe "CWE-829" :kind :passive}
+  {:rule-id "40048" :zap "40048" :cwe "CWE-1021" :kind :passive}
+  {:rule-id "40049" :zap "40049" :cwe "CWE-319" :kind :passive}
+  {:rule-id "40050" :zap "40050" :cwe "CWE-319" :kind :passive}
+  {:rule-id "40051" :zap "40051" :cwe "CWE-1004" :kind :passive}
+  {:rule-id "40052" :zap "40052" :cwe "CWE-1021" :kind :passive}
+  {:rule-id "40053" :zap "40053" :cwe "CWE-319" :kind :passive}
+  {:rule-id "40054" :zap "40054" :cwe "CWE-693" :kind :passive}
+  {:rule-id "40055" :zap "40055" :cwe "CWE-693" :kind :passive}
+  {:rule-id "40056" :zap "40056" :cwe "CWE-693" :kind :passive}
+  {:rule-id "40057" :zap "40057" :cwe "CWE-319" :kind :passive}
+  {:rule-id "40058" :zap "40058" :cwe "CWE-693" :kind :passive}
+  {:rule-id "40059" :zap "40059" :cwe "CWE-693" :kind :passive}
+  {:rule-id "40060" :zap "40060" :cwe "CWE-319" :kind :passive}
+  {:rule-id "40061" :zap "40061" :cwe "CWE-601" :kind :passive}
+  {:rule-id "40062" :zap "40062" :cwe "CWE-79" :kind :passive}
+  {:rule-id "40063" :zap "40063" :cwe "CWE-693" :kind :passive}
+  {:rule-id "40072" :zap "40072" :cwe "CWE-502" :kind :passive}
+  {:rule-id "40073" :zap "40073" :cwe "CWE-319" :kind :passive}
+  {:rule-id "40074" :zap "40074" :cwe "CWE-116" :kind :passive}
+  {:rule-id "40075" :zap "40075" :cwe "CWE-16" :kind :passive}
+  {:rule-id "40076" :zap "40076" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40077" :zap "40077" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40078" :zap "40078" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40079" :zap "40079" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40080" :zap "40080" :cwe "CWE-200" :kind :passive}
+  {:rule-id "40081" :zap "40081" :cwe "CWE-1104" :kind :passive}
+  {:rule-id "40082" :zap "40082" :cwe "CWE-798" :kind :passive}
+  {:rule-id "40083" :zap "40083" :cwe "CWE-798" :kind :passive}
+  {:rule-id "40084" :zap "40084" :cwe "CWE-200" :kind :passive}
+  {:rule-id "40085" :zap "40085" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40086" :zap "40086" :cwe "CWE-200" :kind :passive}
+  {:rule-id "40087" :zap "40087" :cwe "CWE-200" :kind :passive}
+  {:rule-id "40088" :zap "40088" :cwe "CWE-200" :kind :passive}
+  {:rule-id "40089" :zap "40089" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40090" :zap "40090" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40092" :zap "40092" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40093" :zap "40093" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40094" :zap "40094" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40095" :zap "40095" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40096" :zap "40096" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40097" :zap "40097" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40098" :zap "40098" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40099" :zap "40099" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40100" :zap "40100" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40101" :zap "40101" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40102" :zap "40102" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40103" :zap "40103" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40104" :zap "40104" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40105" :zap "40105" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40106" :zap "40106" :cwe "CWE-209" :kind :passive}
+  {:rule-id "40108" :zap "40108" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40117" :zap "40117" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40118" :zap "40118" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40119" :zap "40119" :cwe "CWE-552" :kind :passive}
+  {:rule-id "40120" :zap "40120" :cwe "CWE-552" :kind :passive}
+  {:rule-id "10003" :zap "10003" :cwe "CWE-1104" :kind :passive}
+  {:rule-id "10037" :zap "10037" :cwe "CWE-319" :kind :passive}
+  {:rule-id "40018" :zap "40018" :cwe "CWE-89" :kind :active}
+  {:rule-id "40021" :zap "40021" :cwe "CWE-94" :kind :active}
+  {:rule-id "40020" :zap "40020" :cwe "CWE-611" :kind :active}
+  {:rule-id "40022" :zap "40022" :cwe "CWE-90" :kind :active}
+  {:rule-id "40023" :zap "40023" :cwe "CWE-943" :kind :active}
+  {:rule-id "40024" :zap "40024" :cwe "CWE-917" :kind :active}
+  {:rule-id "40028" :zap "40028" :cwe "CWE-79" :kind :passive}
+  {:rule-id "40012" :zap "40012" :cwe "CWE-79" :kind :active}
+  {:rule-id "40014" :zap "40014" :cwe "CWE-78" :kind :active}
+  {:rule-id "40019" :zap "40019" :cwe "CWE-22" :kind :active}
+  {:rule-id "40016" :zap "40016" :cwe "CWE-113" :kind :active}
+  {:rule-id "40025" :zap "40025" :cwe "CWE-918" :kind :active}
+  {:rule-id "40026" :zap "40026" :cwe "CWE-918" :kind :active}
+  {:rule-id "40027" :zap "40027" :cwe "CWE-502" :kind :active}]
+ :open-gap
+ [{:family "active: SQLi blind / time-based / stacked (differential transport required)" :cwe "CWE-89"}
+  {:family "active: XSS DOM / stored / via header or cookie (browser transport required)" :cwe "CWE-79"}
+  {:family "active: XXE (XML parser transport required)" :cwe "CWE-611"}
+  {:family "active: SSTI (template engine marker required)" :cwe "CWE-94"}
+  {:family "active: CRLF response splitting beyond request-parameter probe" :cwe "CWE-113"}
+  {:family "active: CMDI variants beyond arithmetic-marker shell (differential transport)" :cwe "CWE-78"}
+  {:family "active: Path traversal variants beyond file-read sentinel (write/bash variants)" :cwe "CWE-22"}]}

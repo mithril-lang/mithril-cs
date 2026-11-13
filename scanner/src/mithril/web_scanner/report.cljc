@@ -1,0 +1,100 @@
+(ns mithril.web-scanner.report
+  "Report generation: turns findings into
+  an EDN document (canonical) and a JSON rendering. Pure."
+  (:require [mithril.web-scanner.text :as str]
+            [mithril.web-scanner.core :as core]))
+
+(def ^:private json-esc
+  (fn [s] (-> s (str/replace "\\" "\\\\") (str/replace "\"" "\\\"")
+              (str/replace "\n" "\\n") (str/replace "\r" "\\r") (str/replace "\t" "\\t"))))
+
+(defn- json-str [s] (str "\"" (json-esc (str s)) "\""))
+
+(defn- finding->json [f]
+  (str "{"
+       "\"rule_id\":" (json-str (:rule-id f)) ","
+       "\"severity\":" (json-str (name (get f :severity :low))) ","
+       "\"title\":" (json-str (:title f)) ","
+       "\"url\":" (json-str (:url f)) ","
+       "\"evidence\":" (json-str (:evidence f))
+       (when-let [p (:param f)] (str ",\"param\":" (json-str p)))
+       (when-let [s (:solution f)] (str ",\"solution\":" (json-str s)))
+       (when-let [c (:cwe f)] (str ",\"cwe\":" (json-str c)))
+       (when-let [vs (:cve-ids f)] (str ",\"cve_ids\":[" (str/join "," (map json-str vs)) "]"))
+       (when-let [v (:cvss f)] (str ",\"cvss\":" v))
+       (when-let [b (:cvss-band f)] (str ",\"cvss_band\":" (json-str (name b))))
+       (when-let [r (:risk-rank f)] (str ",\"risk_rank\":" (json-str (name r))))
+       "}"))
+
+(defn report-edn
+  "Canonical report document. Complete means this bounded collection finished,
+  never that the application was fully tested or found secure."
+  [{:keys [target findings started-at crawl mode max-pages]}]
+  (let [by-sev (group-by :severity findings)
+        collection-state (cond
+                           (nil? crawl) :unknown
+                           (= mode "active") :partial
+                           (and (:queue-drained? crawl) (empty? (:failures crawl))) :complete
+                           :else :partial)
+        coverage (when crawl
+                   {:attempted-pages (count (:visited crawl))
+                    :fetched-pages (count (:pages crawl))
+                    :transport-failures (count (:failures crawl))
+                    :queued-unattempted (or (:queued-unattempted crawl) 0)
+                    :queue-drained? (true? (:queue-drained? crawl))
+                    :max-pages max-pages})]
+    {:report/version 2
+     :report/product "Mithril Web Scanner"
+     :report/engine "mithril-lang/mithril-cs/scanner"
+     :report/target target
+     :report/started-at started-at
+     :report/method (case mode
+                      "active" :limited-active-get-v1
+                      "passive" :passive-html-get-v1
+                      :unknown)
+     :report/collection-state collection-state
+     :report/coverage coverage
+     :report/urls (vec (map :url (:pages crawl)))
+     :report/limitations (cond-> ["HTML attribute discovery only; JavaScript routes are not covered."
+                                  "GET-only transport; forms and authenticated workflows are not covered."
+                                  "A complete collection does not establish complete application coverage or security."]
+                            (= mode "active")
+                            (conj "Active checks cover only the implemented GET query probes; active probe transport completeness is not measured."))
+     :report/counts (into {} (for [[s fs] by-sev] [s (count fs)]))
+     :report/total (count findings)
+     :report/findings (vec findings)}))
+
+(defn report-json
+  "JSON string rendering of the same report."
+  [doc]
+  (let [r (if (:report/version doc) doc (report-edn doc))
+        target (:report/target r)
+        findings (:report/findings r)
+        coverage (:report/coverage r)]
+    (str "{"
+         "\"version\":" (:report/version r) ","
+         "\"product\":" (json-str (:report/product r)) ","
+         "\"engine\":" (json-str (:report/engine r)) ","
+         "\"target\":" (json-str target) ","
+         "\"method\":" (json-str (name (:report/method r))) ","
+         "\"collection_state\":" (json-str (name (:report/collection-state r))) ","
+         "\"limitations\":[" (str/join "," (map json-str (:report/limitations r))) "],"
+         "\"coverage\":" (if coverage
+                            (str "{\"attempted_pages\":" (:attempted-pages coverage)
+                                 ",\"fetched_pages\":" (:fetched-pages coverage)
+                                 ",\"transport_failures\":" (:transport-failures coverage)
+                                 ",\"queued_unattempted\":" (:queued-unattempted coverage)
+                                 ",\"queue_drained\":" (if (:queue-drained? coverage) "true" "false")
+                                 ",\"max_pages\":" (:max-pages coverage) "}")
+                            "null") ","
+         "\"urls\":[" (str/join "," (map json-str (:report/urls r))) "],"
+         "\"total\":" (:report/total r) ","
+         "\"catalog\":" (if-let [c (:report/catalog r)]
+                             (str "{\"version\":" (:version c) ",\"last_updated\":" (json-str (str (:last-updated c))) "}")
+                             "null") ","
+         "\"counts\":{"
+         (str/join "," (for [[s n] (:report/counts r)]
+                         (str (json-str (name s)) ":" n)))
+         "},"
+         "\"findings\":[" (str/join "," (map finding->json findings)) "]"
+         "}")))

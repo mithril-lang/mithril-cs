@@ -1,0 +1,99 @@
+(ns mithril.web-scanner.spider
+  "Crawler: fetch the seed URL, extract links and
+  form actions, enqueue same-origin candidates, dedupe on normalized URL.
+
+  The HTTP effect is injected: `fetch-fn` receives a request map and returns a
+  response map (see mithril.web-scanner.core). The approval record and each URL
+  are checked before the callback runs."
+  (:require [mithril.web-scanner.text :as str]
+            [mithril.web-scanner.core :as core]
+            [mithril.web-scanner.authorization :as authorization]))
+
+(defn extract-links
+  "All href/src/action URLs from an HTML body. Pure regex extraction — this is
+  a defensive scanner, not a browser engine; JS-discovered endpoints are out of
+  scope for this tier (documented gap in ADR-2609060001)."
+  [body]
+  (let [hrefs (re-seq #"(?i)(?:href|src|action)\s*=\s*[\"']([^\"']+)[\"']" (or body ""))]
+    (mapv second hrefs)))
+
+(defn extract-js-references
+  "URL strings referenced from a JavaScript body. Static string scan only
+  (no execution) — fetch(), url/endpoint/path assignments and absolute paths.
+  Script src URLs are already returned by extract-links; this covers the
+  bodies those script files carry once they are fetched as pages."
+  [body]
+  (let [s (or body "")
+        fetches (re-seq #"(?i)fetch\(\s*[\"']([^\"']+)[\"']" s)
+        assigned (re-seq #"(?i)(?:url|endpoint|path|apiUrl)\s*[:=]\s*[\"']([^\"']+)[\"']" s)
+        absolute (re-seq #"[\"'](/[A-Za-z0-9/_\.-]+(?:\?[A-Za-z0-9/_\.-]*)?)[\"']" s)]
+    (vec (concat (mapv second fetches) (mapv second assigned) (mapv second absolute)))))
+
+(defn- absolute [base href]
+  (when-not (or (str/blank? href) (str/starts-with? href "#"))
+    (try
+      ;; Platform URL parsers resolve relative paths and query-only links
+      ;; against the response URL. String concatenation missed nested paths.
+      #?(:cljs (str (js/URL. href base))
+         :clj (if (str/starts-with? href "?") (str (first (str/split base #"[?#]" 2)) href) (str (.resolve (java.net.URI/create base) href))))
+      (catch #?(:cljs :default :clj Throwable) _ nil))))
+
+(defn extract-candidates
+  "In-scope, normalized, deduped candidate URLs found in one response."
+  [base-url body]
+  (->> (concat (extract-links body) (extract-js-references body))
+       (map (fn [h] (some->> h (absolute base-url) core/normalize-url)))
+       (remove nil?)
+       (filter #(core/same-origin? base-url %))
+       distinct
+       vec))
+
+(defn spider
+  "Breadth-first crawl within the target origin.
+
+  opts:
+    :max-pages   hard cap on fetched pages (default 50)
+    :approval-id current reviewed approval record ID (required)
+    :mode        passive or active, matching the full scan (required)
+    :fetch-fn    request-map -> response-map (required; the injected effect)
+  Returns successful pages, attempted URLs, transport failures and whether
+  every discovered URL was attempted. A failed request is not a scanned page."
+  [{:keys [seed-url fetch-fn max-pages approval-id mode] :or {max-pages 50}}]
+  (when-not (and (integer? max-pages) (<= 1 max-pages 500) (ifn? fetch-fn))
+    (throw (ex-info "Invalid crawl budget or transport" {})))
+  (let [initial-scope (authorization/authorization-scope
+                       approval-id seed-url mode max-pages)
+        guarded-fetch (authorization/guarded-transport
+                       approval-id mode max-pages initial-scope fetch-fn)]
+    ;; The page cap applies to attempts, including failed requests.
+    (loop [queue [seed-url]
+           queued #{seed-url}
+           cursor 0
+           visited #{}
+           pages []
+           failures []]
+      (cond
+        (= cursor (count queue))
+        {:pages pages :visited visited :failures failures
+         :queued-unattempted 0 :queue-drained? true}
+
+        (>= (count visited) max-pages)
+        {:pages pages :visited visited :failures failures
+         :queued-unattempted (- (count queue) cursor) :queue-drained? false}
+
+        :else
+        (let [url (nth queue cursor)
+              response (guarded-fetch {:method "GET" :url url :headers {} :body nil})
+              valid? (and (map? response)
+                          (integer? (:status response))
+                          (<= 100 (:status response) 599)
+                          (map? (:headers response))
+                          (string? (:body response)))
+              candidates (if valid? (extract-candidates url (:body response)) [])
+              new (vec (remove queued candidates))]
+          (recur (into queue new)
+                 (into queued new)
+                 (inc cursor)
+                 (conj visited url)
+                 (if valid? (conj pages (assoc response :url url)) pages)
+                 (if valid? failures (conj failures {:url url :reason :transport-failure}))))))))

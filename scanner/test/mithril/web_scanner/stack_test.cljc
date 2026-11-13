@@ -1,0 +1,234 @@
+(ns mithril.web-scanner.stack-test
+  "Spider + passive + active over an injected mock transport.
+  No socket is opened anywhere in this suite — the effect is a map lookup,
+  which is the whole point of the seam."
+  (:require [cheshire.core :as json] [clojure.edn :as edn]
+            [mithril.web-scanner.test-fs :as fs]
+            [mithril.web-scanner.test-fs :as fs-host] [clojure.test :refer [deftest is testing]]
+            [mithril.web-scanner.spider :as spider]
+            [mithril.web-scanner.passive :as passive]
+            [mithril.web-scanner.active :as active]
+            [mithril.web-scanner.test-support :as test-support]
+            [mithril.web-scanner.report :as report]
+            [mithril.web-scanner.authorization :as authorization]))
+
+(def ^:private site
+  {"http://t.local/" {:status 200 :headers {"content-type" "text/html"} :body
+                      "<html><body><a href=\"/a\">a</a><a href=\"/x?uid=1\">x</a><a href=\"https://other.example/y\">out</a></body></html>"}
+   "http://t.local/a" {:status 200 :headers {} :body "<html><body><a href=\"/x?uid=1\">x</a></body></html>"}
+   "http://t.local/x?uid=1" {:status 200
+                             :headers {"set-cookie" "sid=abc123; Path=/"}
+                             :body "<html><body>uid is 1 password: hunter2</body></html>"}})
+
+(def ^:private multi-cookie-site
+  "java.net.http style multi-value Set-Cookie — value is a vector (regression:
+  ImmutableCollections$List12 cannot be cast to CharSequence)."
+  {"http://t.local/mc" {:status 200
+                        :headers {"set-cookie" ["kb_locale=ja; Path=/; SameSite=Lax; Secure"
+                                                "sid=abc123; Path=/"]}
+                        :body "<html></html>"}})
+
+(deftest passive-multi-value-set-cookie-test
+  (let [findings (passive/check-cookie-flags
+                  {:url "http://t.local/mc"}
+                  (get multi-cookie-site "http://t.local/mc"))]
+    ;; vector cookie 1: missing HttpOnly → 1 finding; vector cookie 2: missing
+    ;; Secure/HttpOnly/SameSite → 3 findings. Crash here = regression.
+    (is (= 4 (count findings)))
+    (is (every? #(= "10010" (:rule-id %)) findings))
+    (is (every? #(re-find #"sid=abc123|kb_locale" (:evidence %)) findings))))
+
+(def ^:private fetch-fn
+  (fn [req] (get site (:url req) {:status 404 :headers {} :body "not found"})))
+
+(def ^:private mock-approval-scope
+  {:ok true :mode "passive" :max-pages 50
+   :assets [{:origin "http://t.local:80" :path "/"}]})
+
+(deftest spider-test
+  (with-redefs [authorization/authorization-scope
+                (fn [_ _ mode _] (assoc mock-approval-scope :mode mode))]
+    (let [{:keys [pages visited queue-drained?]}
+          (spider/spider {:seed-url "http://t.local/" :fetch-fn fetch-fn
+                          :approval-id "test-approval" :mode "passive"})]
+      (is (contains? visited "http://t.local/"))
+      (is (contains? visited "http://t.local/a"))
+      (is (contains? visited "http://t.local/x?uid=1"))
+      (is (= 3 (count pages)))
+      (is (true? queue-drained?))
+      ;; out-of-origin link never fetched
+      (is (not (some #(re-find #"other.example" %) visited))))))
+
+(deftest nested-relative-link-resolution-test
+  (let [candidates (spider/extract-candidates
+                    "http://t.local/app/page"
+                    (str "<a href=\"next\">next</a>"
+                         "<a href=\"?page=2\">query</a>"
+                         "<a href=\"../outside\">outside path</a>"
+                         "<a href=\"//other.example/x\">other origin</a>"
+                         "<a href=\"javascript:alert(1)\">script</a>"))]
+    (is (= ["http://t.local/app/next"
+            "http://t.local/app/page?page=2"
+            "http://t.local/outside"]
+           candidates))))
+
+(deftest bounded-collection-state-test
+  (with-redefs [authorization/authorization-scope
+                (fn [_ _ mode _] (assoc mock-approval-scope :mode mode))]
+    (let [complete (test-support/scan {:target "http://t.local/"
+                                       :approval-id "test-approval"
+                                       :fetch-fn fetch-fn :max-pages 3})
+          capped (test-support/scan {:target "http://t.local/"
+                                     :approval-id "test-approval"
+                                     :fetch-fn fetch-fn :max-pages 2})
+          failed (test-support/scan {:target "http://t.local/"
+                                     :approval-id "test-approval"
+                                     :fetch-fn (fn [{:keys [url] :as request}]
+                                                 (if (= url "http://t.local/a")
+                                                   {:status 0 :headers {} :body "timeout"}
+                                                   (fetch-fn request)))
+                                     :max-pages 3})]
+      (is (= :complete (:report/collection-state complete)))
+      (is (= {:attempted-pages 3 :fetched-pages 3 :transport-failures 0
+              :queued-unattempted 0
+              :queue-drained? true :max-pages 3}
+             (:report/coverage complete)))
+      (is (= :partial (:report/collection-state capped)))
+      (is (= false (get-in capped [:report/coverage :queue-drained?])))
+      (is (= 2 (get-in capped [:report/coverage :attempted-pages])))
+      (is (= 1 (get-in capped [:report/coverage :queued-unattempted])))
+      (is (= :partial (:report/collection-state failed)))
+      (is (= 1 (get-in failed [:report/coverage :transport-failures])))
+      (is (= 2 (get-in failed [:report/coverage :fetched-pages])))
+      (is (not (some #(= "http://t.local/a" (:url %)) (:report/findings failed)))))))
+
+(deftest no-findings-is-not-security-certification-test
+  (let [doc (report/report-edn
+             {:target "http://t.local/" :findings [] :mode "passive" :max-pages 1
+              :crawl {:pages [{:status 200 :headers {} :body ""}]
+                      :visited #{"http://t.local/"} :failures []
+                      :queue-drained? true}})
+        json (json/parse-string (report/report-json
+                              {:target "http://t.local/" :findings []
+                               :mode "passive" :max-pages 1
+                               :crawl {:pages [{:status 200 :headers {} :body ""}]
+                                       :visited #{"http://t.local/"} :failures []
+                                       :queue-drained? true}}))]
+    (is (= 0 (:report/total doc)))
+    (is (= :complete (:report/collection-state doc)))
+    (is (some #(re-find #"does not establish" %) (:report/limitations doc)))
+    (is (= "complete" (get json "collection_state")))
+    (is (= 0 (get-in json ["coverage" "transport_failures"])))))
+
+(deftest active-probes-cannot-inherit-crawl-completion-test
+  (let [crawl {:pages [{:status 200 :headers {} :body ""}]
+               :visited #{"http://t.local/"} :failures []
+               :queued-unattempted 0 :queue-drained? true}
+        doc (report/report-edn {:target "http://t.local/" :findings []
+                                :mode "active" :max-pages 1 :crawl crawl})]
+    (is (= :partial (:report/collection-state doc)))
+    (is (some #(re-find #"completeness is not measured" %)
+              (:report/limitations doc)))))
+
+(deftest spider-never-fetches-out-of-scope-path-test
+  (let [fetches (atom [])
+        scoped {:ok true :mode "passive" :max-pages 10
+                :assets [{:origin "http://t.local:80" :path "/app"}]}
+        result (with-redefs [authorization/authorization-scope
+                             (fn [_ _ mode _] (assoc scoped :mode mode))]
+                 (try
+                   (spider/spider
+                    {:seed-url "http://t.local/app"
+                     :approval-id "test-approval"
+                     :mode "passive"
+                     :max-pages 10
+                     :fetch-fn (fn [{:keys [url]}]
+                                 (swap! fetches conj url)
+                                 {:status 200 :headers {}
+                                  :body "<a href=\"/private\">private</a>"})})
+                   :completed
+                   (catch #?(:cljs :default :clj Throwable) error
+                     {:refused (:refused (ex-data error))})))]
+    (is (= {:refused true} result))
+    (is (= ["http://t.local/app"] @fetches))))
+
+(deftest passive-test
+  (testing "cookie flags"
+    (let [findings (passive/check-cookie-flags
+                    {:url "http://t.local/x?uid=1"}
+                    (get site "http://t.local/x?uid=1"))]
+      (is (>= (count findings) 2)) ; missing Secure, HttpOnly, SameSite (3 expected)
+      (is (every? #(= "10010" (:rule-id %)) findings))))
+  (testing "security headers"
+    (let [findings (passive/check-security-headers
+                    {:url "http://t.local/"}
+                    (get site "http://t.local/"))]
+      (is (= 9 (count findings)))))
+  (testing "sensitive info"
+    (let [findings (passive/check-sensitive-info
+                    {:url "http://t.local/x?uid=1"}
+                    (get site "http://t.local/x?uid=1"))]
+      (is (= 1 (count findings)))
+      (is (= :high (:severity (first findings)))))))
+
+(deftest active-test
+  (with-redefs [authorization/authorization-scope
+                (fn [_ _ mode _] (assoc mock-approval-scope :mode mode))]
+    (testing "SQLi error reflection detected"
+      (let [findings (active/active-scan
+                      {:url "http://t.local/x?uid=1"
+                       :approval-id "test-approval"
+                       :send-fn (fn [{:keys [url]}]
+                                  (if (re-find #"'|OR 1=1" url)
+                                    {:status 200 :headers {} :body "SQLSTATE error near input"}
+                                    {:status 200 :headers {} :body "welcome"}))})]
+        (is (some #(= "40018" (:rule-id %)) findings))
+        (is (some #(= "uid" (:param %)) findings))))
+    (testing "benign app: no findings"
+      (let [findings (active/active-scan
+                      {:url "http://t.local/x?uid=1" :approval-id "test-approval"
+                       :send-fn (fn [_] {:status 200 :headers {} :body "welcome"})})]
+        (is (empty? findings))))))
+
+(deftest cli-pipeline-test
+  (with-redefs [authorization/authorization-scope
+                (fn [_ _ mode _] (assoc mock-approval-scope :mode mode))]
+    (let [doc (test-support/scan {:target "http://t.local/" :approval-id "test-approval"
+                         :fetch-fn fetch-fn :active? false})]
+      (is (= "http://t.local/" (:report/target doc)))
+      (is (pos? (:report/total doc)))
+      (is (map? (:report/counts doc)))
+      (is (vector? (:report/findings doc))))))
+
+(deftest cli-refuses-without-an-approval-before-transport-test
+  (let [transport-called? (atom false)
+        result (try
+                 (test-support/scan {:target "http://127.0.0.1:9/"
+                            :approval-id "test-missing-approval-9f4a8f"
+                            :fetch-fn (fn [_]
+                                        (reset! transport-called? true)
+                                        {:status 200 :headers {} :body ""})
+                            :active? false})
+                 :completed
+                 (catch #?(:cljs :default :clj Throwable) error
+                   {:refused true}))]
+    (is (= {:refused true} result))
+    (is (false? @transport-called?))))
+
+(deftest report-test
+  (with-redefs [authorization/authorization-scope
+                (fn [_ _ mode _] (assoc mock-approval-scope :mode mode))]
+    (let [doc (test-support/scan {:target "http://t.local/" :approval-id "test-approval"
+                         :fetch-fn fetch-fn :active? false})
+          json (report/report-json {:target "http://t.local/" :findings (:report/findings doc)})]
+      (is (re-find #"\"total\":\d+" json))
+      (is (re-find #"\"rule_id\":\"10010\"" json))
+      (is (re-find #"\"rule_id\":\"10038\"" json))
+      (is (re-find #"\"rule_id\":\"10027\"" json)))))
+
+(deftest rules-registry-test
+  (let [filesystem (fs-host/host-filesystem
+                   {:root (.getCanonicalPath (java.io.File. "."))})
+        rules (edn/read-string (fs/read filesystem "resources/zap_proxy/rules/rules.edn"))]
+    (is (= 93 (count rules)))
+    (is (every? #(contains? % :zap-proxy.rule/id) rules))))

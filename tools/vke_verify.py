@@ -53,11 +53,14 @@ def main():
     p.add_argument("--node", required=True)
     p.add_argument("--node-uid", required=True)
     p.add_argument("--baseline", required=True, help="existing owner-reviewed CI platform policy JSON")
+    p.add_argument("--zap", action="store_true", help="Standalone Mithril scanner full tests and passive HTTP dogfood")
     p.add_argument("--all-runtimes", action="store_true", help="Run JVM, compiled CLJS/Node and BB with pinned toolchain inputs")
     p.add_argument("--python-contracts", action="store_true", help="Run the bounded router recovery contract suite")
     p.add_argument("--additional-slot", action="store_true", help="Preserve exact legacy unknown reservation (4GiB/2CPU); add bounded CS slot")
     args = p.parse_args()
     image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9" if args.python_contracts else BB
+    if args.zap: image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9"
+    need(sum([args.zap,args.all_runtimes,args.python_contracts])<=1,"choose one recipe")
     if args.all_runtimes: image = "docker.io/library/clojure@sha256:3bf1f971f18c68352e90e33f15435ed18e2f7ed040f1cd6baa1e8aa87b588593"
     need(re.fullmatch("[0-9a-f]{40}", args.source), "source revision required")
     k = ["kubectl", "--kubeconfig", args.kubeconfig, "--request-timeout=12s"]
@@ -107,7 +110,7 @@ def main():
         count = 0
         for member in archive:
             count += 1
-            need(count <= 256, "source archive entry budget")
+            need(count <= 512, "source archive entry budget")
             if member.isdir(): continue
             path = member.name.split("/",1)[-1]
             need(member.isfile() and path in expected and path not in files
@@ -117,7 +120,7 @@ def main():
                  "source blob mismatch")
             files[path] = raw.decode("utf-8")
     need(set(files) == set(expected), "incomplete source archive")
-    need(len(files) <= 64 and sum(len(v.encode()) for v in files.values()) <= 512 * 1024, "source budget")
+    need(len(files) <= 128 and sum(len(v.encode()) for v in files.values()) <= 1024 * 1024, "source budget")
     policy = json.load(open(args.baseline))
     old_rows = policy["platform_pods"]
     # Refresh identities only after original platform owner/image comparison.
@@ -201,7 +204,7 @@ def main():
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
             need(-5 <= age <= 30, "stale metrics")
-        need(s["memory"]["availableBytes"] >= (6 if args.all_runtimes else (5.5 if args.additional_slot else 5)) * GIB and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
+        need(s["memory"]["availableBytes"] >= (6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5)) * GIB and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
         need(s["cpu"]["usageNanoCores"] <= (1500000000 if own else 500000000), "CPU hold")
         if lease_uid:
             lease = get("lease", LEASE, "-n", LNS)
@@ -303,6 +306,17 @@ bb cs pentest-fixture --authorized
 if timeout 3 bash -c 'exec 3<>/dev/tcp/10.96.0.1/443'; then echo PRIVATE_API_EGRESS_DENY_FAILED; exit 1; fi
 echo ALL_RUNTIMES_PASS
 """
+    if args.zap:
+        peers=sorted({r[4][0] for r in socket.getaddrinfo("mithril.fund",443,socket.AF_INET,socket.SOCK_STREAM)})
+        need(peers and all(ipaddress.ip_address(x).is_global for x in peers),"public company DNS")
+        scan_policy={"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"mcs-zap-egress","namespace":NS},
+          "spec":{"podSelector":{"matchLabels":{"mithril.fund/cs-dependency":"zap"}},"policyTypes":["Egress"],
+           "egress":[{"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}],"ports":[{"protocol":"UDP","port":53},{"protocol":"TCP","port":53}]},
+                     {"to":[{"ipBlock":{"cidr":x+"/32"}} for x in peers],"ports":[{"protocol":"TCP","port":443}]}]}}
+        old=get("NetworkPolicy","mcs-zap-egress","-n",NS,absent=True)
+        if old is None: create(scan_policy)
+        else: need(old["spec"]==scan_policy["spec"],"company peer drift requires requalification")
+        script=script[:script.index("cd /tmp/source")] + "cd /tmp/source\nexport PATH=/tooling:/usr/local/bin:/usr/bin:/bin\nexport LD_LIBRARY_PATH=/tooling\npython -B tools/test_zap_ci.py\npython -B tools/zap_ci.py\n"
     container = {"name":"contracts","image":image,"command":["/init/tini","-g","--","sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
       "resources":{"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"512Mi"}},
       "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
@@ -326,13 +340,28 @@ echo ALL_RUNTIMES_PASS
               "resources":{"requests":{"cpu":"100m","memory":"64Mi","ephemeral-storage":"64Mi"},"limits":{"cpu":"200m","memory":"128Mi","ephemeral-storage":"256Mi"}},
               "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
               "volumeMounts":[{"name":"tooling","mountPath":"/tooling"}]})
+    if args.zap:
+        container["resources"]={"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},
+                                "limits":{"cpu":"1","memory":"1Gi","ephemeral-storage":"2Gi"}}
+        container["volumeMounts"].append({"name":"tooling","mountPath":"/tooling"})
+        spec["volumes"].append({"name":"tooling","emptyDir":{"sizeLimit":"256Mi"}})
+        spec["volumes"][-2]["emptyDir"]["sizeLimit"]="1Gi"
+        spec["initContainers"]=[]
+        for tool,toolimage,command in [
+            ("bb",BB,"cp /usr/local/bin/bb /tooling/bb"),
+            ("node","docker.io/library/node@sha256:47725aca53d3295ec2d3be8f62726599b3033cc262edc2c7e429909b3ac599fc",
+             "cp /usr/local/bin/node /tooling/node; cp /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /tooling/; cp /lib/x86_64-linux-gnu/libgcc_s.so.1 /tooling/")]:
+            spec["initContainers"].append({"name":"install-"+tool,"image":toolimage,"command":["sh","-c",command],
+             "resources":{"requests":{"cpu":"100m","memory":"64Mi","ephemeral-storage":"64Mi"},"limits":{"cpu":"200m","memory":"128Mi","ephemeral-storage":"256Mi"}},
+             "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
+             "volumeMounts":[{"name":"tooling","mountPath":"/tooling"}]})
     job = {"apiVersion":"batch/v1","kind":"Job","metadata":{"name":name,"namespace":NS,"annotations":{"mithril.fund/source":args.source}},
-      "spec":{"backoffLimit":0,"activeDeadlineSeconds":1200 if args.all_runtimes else 240,"template":{"metadata":{"labels":{"mithril.fund/cs-run":name,**({"mithril.fund/cs-dependency":"maven"} if args.all_runtimes else {})}},"spec":spec}}}
+      "spec":{"backoffLimit":0,"activeDeadlineSeconds":1200 if (args.all_runtimes or args.zap) else 240,"template":{"metadata":{"labels":{"mithril.fund/cs-run":name,**({"mithril.fund/cs-dependency":"maven"} if args.all_runtimes else ({"mithril.fund/cs-dependency":"zap"} if args.zap else {}))}},"spec":spec}}}
     actual = create(job)
     own = actual["metadata"]["uid"]
     ledger.update(phase="submitted",job_uid=own,source_cm_uid=cm["metadata"]["uid"],lease_uid=lease_uid)
     print(json.dumps(ledger),flush=True)
-    deadline = time.monotonic()+(1220 if args.all_runtimes else 260)
+    deadline = time.monotonic()+(1220 if (args.all_runtimes or args.zap) else 260)
     while time.monotonic()<deadline:
         fresh()
         j = get("job",name,"-n",NS)
@@ -349,6 +378,7 @@ echo ALL_RUNTIMES_PASS
             need(logs.returncode==0 and len(logs.stdout.encode())<524288, "logs unavailable or truncated; keep lease")
             success=any(c.get("type")=="Complete" and c.get("status")=="True" for c in conditions) and all(s.get("restartCount")==0 and s["state"]["terminated"]["exitCode"]==0 for s in statuses)
             ledger.update(phase="terminal",success=success,pod_uid=pod["metadata"]["uid"],log_sha256=hashlib.sha256(logs.stdout.encode()).hexdigest(),
+                          zap_result=next((json.loads(line[len("ZAP_CI_RESULT "):]) for line in logs.stdout.splitlines() if line.startswith("ZAP_CI_RESULT ")),None),
                           image=image,source_tree=commit["tree"]["sha"],source_manifest_sha256=digest(manifest))
             # Bounded logs remain in the retained Pod. Only metadata enters journal.
             old=get("ConfigMap",name+"-journal","-n",NS)
@@ -359,7 +389,7 @@ echo ALL_RUNTIMES_PASS
             kube("delete","--raw","/apis/coordination.k8s.io/v1/namespaces/"+LNS+"/leases/"+LEASE,"-f","-",body={"apiVersion":"v1","kind":"DeleteOptions","preconditions":{"uid":lease_uid,"resourceVersion":current["metadata"]["resourceVersion"]}})
             need(get("lease",LEASE,"-n",LNS,absent=True) is None, "release unknown")
             print(json.dumps(ledger),flush=True)
-            print("\n".join(l for l in logs.stdout.splitlines() if l.startswith(("Testing ","Ran ","0 failures","FAIL","ERROR","expected:","  actual:","TINI_","ALL_","OK","test_","PRIVATE_","clojure","ClojureScript"))),flush=True)
+            print("\n".join(l for l in logs.stdout.splitlines() if l.startswith(("Testing ","Ran ","0 failures","FAIL","ERROR","expected:","  actual:","TINI_","ALL_","OK","test_","PRIVATE_","ZAP_","PYTHON_","CWE matrix","clojure","ClojureScript"))),flush=True)
             raise SystemExit(0 if success else 1)
         time.sleep(3)
     raise RuntimeError("deadline unknown; retain source/journal/lease for reconciliation")
