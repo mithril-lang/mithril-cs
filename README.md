@@ -15,7 +15,7 @@ bb cs pentest-fixture --authorized
 # JVM equivalent
 clojure -M:test
 clojure -M:run review test/fixtures/demo --authorized
-# Portable core + rules on Node/ClojureScript
+# Portable authorization, rules, fixture assessment and repair on Node/ClojureScript
 clojure -M:cljs-test
 ```
 
@@ -33,5 +33,7 @@ Limits: 250 supported files, 256 KiB/file, 4 MiB total, 10,000 entries, depth 32
 - [Architecture and integration](docs/architecture.md), [roadmap](docs/roadmap.md), [security](SECURITY.md).
 
 This is an original implementation inspired by the product category of [Strix](https://github.com/usestrix/strix), not a fork or a parity claim. Reference review: upstream revision `928b1ca66ea5a00e7fe83f0fce84c7d557ff8091`, 2026-11-13. No Strix engine code or branding copied. Apache-2.0.
+
+VKE qualification: JVM and Babashka each15 tests/82 assertions; ClojureScript10 tests/63 assertions, all passed. Exact revisions, runtime images and remaining boundaries are in [validation](docs/validation.md).
 
 Delivery tracking: [MITHRIL-2471](https://linear.app/kotobalabs/issue/MITHRIL-2471). Existing Mithril Fund security CLI/evidence integration remains under MITHRIL-2203. This repository does not depend on private Fund source.

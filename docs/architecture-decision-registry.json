@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "registry_updated_at": "2026-11-13",
-  "coverage": "Independent CS engine decision only; additive entry pending owning Fund registry integration",
+  "coverage": "Independent CS engine decision; owning Fund registry remains an incremental workspace index",
   "sources": [
     {
       "id": "cs-adr-0001",
@@ -30,7 +30,7 @@
       "scope": "mithril-lang/mithril-cs initial source only",
       "decision": "Portable CLJC policy/rules and controlled fixture assessment/repair/retest; explicit CLJ filesystem adapter; retain existing Fund engine and live authority",
       "deployment_status": "SOURCE_ONLY_NO_SERVICE_CUTOVER",
-      "review_state": "INITIAL_VALIDATION_REQUIRED",
+      "review_state": "PORTABILITY_VERIFIED_SERVICE_INTEGRATION_OPEN",
       "source_refs": [
         "cs-adr-0001",
         "linear-2471",
@@ -41,7 +41,7 @@
           "id": "cs-a1",
           "kind": "design_assumption",
           "statement": "Portable policy fits JVM and CLJS without executing target code",
-          "status": "VALIDATION_PENDING",
+          "status": "OBSERVED_VKE_JVM_BB_CLJS",
           "source_refs": [
             "cs-adr-0001"
           ]
@@ -51,13 +51,13 @@
         {
           "id": "cs-m1",
           "name": "Qualified portable test executions",
-          "value": null,
+          "value": 3,
           "unit": "runs",
-          "kind": "unmeasured",
-          "observed_at": null,
-          "sample_size": null,
-          "workload": "Exact source JVM/BB/CLJS",
-          "unknown_reason": "Not executed at initial authoring",
+          "kind": "synthetic_vke_test",
+          "observed_at": "2026-11-13",
+          "sample_size": 3,
+          "workload": "One exact source cf9a3b3: JVM15/82, BB15/82, CLJS10/63; all zero failures/errors",
+          "unknown_reason": null,
           "source_refs": [
             "linear-2471"
           ]
@@ -71,7 +71,7 @@
           "response": "Revisit ADR and integration contract before active service adoption"
         }
       ],
-      "next_action": "Resolve current exact-source VKE capacity/admission and credential input; execute all runtime suites and versioned Fund translation fixtures before integration/service adoption",
+      "next_action": "Verify integrated main; qualify versioned Fund translation, verified target authority and bounded live executor before service adoption",
       "responsible_owner": "Codex source; independent reviewer UNKNOWN"
     }
   ]

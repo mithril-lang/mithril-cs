@@ -14,9 +14,9 @@
 
 Do not duplicate or mark these parent workstreams Done after the bootstrap. A small source reviewer is not a Strix feature-equivalent engine.
 
-## First integration acceptance
+## Following integration acceptance
 
-1. Execute BB and JVM tests at the exact public source revision; execute CLJS tests for the portable namespaces.
+1. BB/JVM/CLJS passed at the exact revision in validation.md. Re-run against actual integrated main and retain source-bound results in MITHRIL-2471.
 2. Verify fail-closed limits, denied/revoked/expired grants, scope changes, cancellation, empty scope, invalid source encoding and symlink exclusions.
 3. Translate current Fund evidence to/from a versioned public schema without losing source/tenant/coverage binding. Reject stale/tampered/mixed-run evidence.
 4. Add a fixture-only executor with deny-default egress and verified test identities before any authorized active target. Separately qualify deadline/cancellation and container failure/unknown outcomes.
