@@ -425,7 +425,7 @@
       "git_blob": "019b6292cbc62e5f15b3d6796f195deb4ca1a73d",
       "source_sha256": "79d7eabc514dd41b43ff5d49d46b98d8a956d5f80dcf9c41913624a17bc93440",
       "owned_path": "scanner/src/mithril/web_scanner/active.cljc",
-      "owned_sha256": "cf84a8ca1f7eb5cb05d4c28d7c80bd20158bb9a6e0a58209fa32bf10d5ef441c"
+      "owned_sha256": "4ff222e73e30b6c5eeea5bdcabbcc1166ed83b9d17bdffe56fe69b116678f371"
     },
     {
       "source_path": "src/kotoba/zap_proxy/authorization.cljc",
@@ -446,7 +446,7 @@
       "git_blob": "e659a4940a95069cb3d722fa642d33d98f6da745",
       "source_sha256": "1f5cd4fbcd4fb588f1f3a47a8fbf8e333053adf59b888c94414c107b28ebd2be",
       "owned_path": "scanner/src/mithril/web_scanner/core.cljc",
-      "owned_sha256": "c565434d2a6b7e1dac6dbd20d9cca6d2ec842709a354c740b3c3a9ea763d0739"
+      "owned_sha256": "d6c5319657e18e01d5203cc289f5613070b9f11138d01c840e980b11641bfcff"
     },
     {
       "source_path": "src/kotoba/zap_proxy/manifest.cljc",
@@ -460,14 +460,14 @@
       "git_blob": "dc11989c44ca0b28bdb132ca7e52491eca0b0866",
       "source_sha256": "72da306ac05c2f1917e6bc190236036988a24dea935376cd44d581e73d09bc62",
       "owned_path": "scanner/src/mithril/web_scanner/passive.cljc",
-      "owned_sha256": "e8859afa4311001027ea943b01df80c1dab8787525dea420628fdc75b300a552"
+      "owned_sha256": "764b05e62d430274bcea75ccbec7637e6f70a8da02b0516cb3629acd44c3ece7"
     },
     {
       "source_path": "src/kotoba/zap_proxy/report.cljc",
       "git_blob": "8b38fa036a7984225e9241440d42e747356cd469",
       "source_sha256": "ab26809e63e3f312eda46fa0a8ef776c2ad79131afb38ca0919f4677856e6e00",
       "owned_path": "scanner/src/mithril/web_scanner/report.cljc",
-      "owned_sha256": "ffb044f4fff3e71170032e7c637874c198628755257ea91cb3cd91bbe48062d9"
+      "owned_sha256": "b8be36292c2047931f7d42e2ada6238504377ef9d5966f201c2ddb45ec77877c"
     },
     {
       "source_path": "src/kotoba/zap_proxy/risk.cljc",
@@ -481,7 +481,7 @@
       "git_blob": "893512498850ef918c033dd553cc29e8b5abd3a9",
       "source_sha256": "18ce05f1186c7c32eab10b0d43744d27e91cc973c2e8625ef655e58042e5da5f",
       "owned_path": "scanner/src/mithril/web_scanner/spider.cljc",
-      "owned_sha256": "71432d47e1ac750af94c36a1ba3968bb9983a80362b2e9abb01f6f0446e19da6"
+      "owned_sha256": "bf19745922f15ee6a1bf90413df96b2e14dbfd3cca137e3272ef59bb5b365253"
     },
     {
       "source_path": "test/kotoba/zap_proxy/authorization_test.cljc",

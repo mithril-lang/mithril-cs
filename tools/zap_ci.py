@@ -4,7 +4,13 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 SCANNER=ROOT/"scanner"
 def run(argv,**kw):
  p=subprocess.run(argv,capture_output=True,text=True,timeout=600,**kw)
- if p.returncode: raise RuntimeError("command failed: "+json.dumps(argv)+"\n"+p.stdout[-8000:]+"\n"+p.stderr[-4000:])
+ if p.returncode:
+  lines=p.stdout.splitlines(); detail=[]
+  for i,line in enumerate(lines):
+   if line.startswith(("ERROR in","FAIL in")):detail.extend(lines[i:i+9])
+   elif line.startswith(("Ran ","Testing ")) or re.match(r"\d+ failures?, \d+ errors?",line):detail.append(line)
+  if not detail:detail=lines[-40:]
+  raise RuntimeError("command failed: "+json.dumps(argv)+"\n"+"\n".join(detail)+"\nstdout_sha256="+hashlib.sha256(p.stdout.encode()).hexdigest()+"\n"+p.stderr[-4000:])
  return p.stdout
 def ledger(path,target,approval="ci-2485"):
  now=int(time.time())

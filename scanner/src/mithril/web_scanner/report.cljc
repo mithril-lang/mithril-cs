@@ -1,7 +1,7 @@
 (ns mithril.web-scanner.report
   "Report generation: turns findings into
   an EDN document (canonical) and a JSON rendering. Pure."
-  (:require [clojure.string :as str]
+  (:require [mithril.web-scanner.text :as str]
             [mithril.web-scanner.core :as core]))
 
 (def ^:private json-esc

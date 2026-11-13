@@ -17,7 +17,7 @@ def collect(checkout):
    before=re.findall(r"\(deftest\s+([^\s()]+)",text)
    test_before.extend(before)
    text=text.replace("kotoba.zap-proxy","mithril.web-scanner").replace("kotoba-lang/zap-proxy","mithril-lang/mithril-cs/scanner")
-   text=text.replace("kotoba.lang.text","clojure.string").replace("kotoba.lang.edn","clojure.edn").replace("kotoba.test","clojure.test")
+   text=text.replace("kotoba.lang.text","mithril.web-scanner.text").replace("kotoba.lang.edn","clojure.edn").replace("kotoba.test","clojure.test")
    text=text.replace("kotoba.lang.fs-host","mithril.web-scanner.test-fs").replace("kotoba.lang.fs","mithril.web-scanner.test-fs")
    text=text.replace("str/lower","str/lower-case")
    text=text.replace('(.realpathSync (js/require "fs") ".")','(.getCanonicalPath (java.io.File. "."))')

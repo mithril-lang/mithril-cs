@@ -5,7 +5,7 @@
   The HTTP effect is injected: `fetch-fn` receives a request map and returns a
   response map (see mithril.web-scanner.core). The approval record and each URL
   are checked before the callback runs."
-  (:require [clojure.string :as str]
+  (:require [mithril.web-scanner.text :as str]
             [mithril.web-scanner.core :as core]
             [mithril.web-scanner.authorization :as authorization]))
 

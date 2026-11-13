@@ -6,7 +6,7 @@
 
   Pure functions over (request, response) pairs; findings are produced with
   rule IDs from the rules registry."
-  (:require [clojure.string :as str]
+  (:require [mithril.web-scanner.text :as str]
             [mithril.web-scanner.core :as core]))
 
 (defn- header-lower [resp name]

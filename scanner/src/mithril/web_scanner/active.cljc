@@ -9,7 +9,7 @@
   behind an active-mode approval and URL scope check.
   Detection is evidence-based (marker reflection / differential response),
   never time-based guessing."
-  (:require [clojure.string :as str]
+  (:require [mithril.web-scanner.text :as str]
             [mithril.web-scanner.core :as core]
             [mithril.web-scanner.authorization :as authorization]))
 
