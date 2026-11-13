@@ -63,9 +63,6 @@ def _gate(target: str, active: bool, approval_id: str, max_pages: int) -> Option
 def _run_core(edn_request: str) -> Dict[str, Any]:
     if not _REPO.exists():
         return {"error": f"zap-proxy repo not found at {_REPO}"}
-    # Engine selection: kbb (nbb/Node) can load the .cljc core on this host;
-    # clojure -M cannot (FileNotFoundException on .cljc namespaces), so it is
-    # only the fallback for hosts that lack kbb.
     bb = shutil.which("bb")
     clojure = shutil.which("clojure")
     if bb:

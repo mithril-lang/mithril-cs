@@ -316,7 +316,7 @@ echo ALL_RUNTIMES_PASS
         old=get("NetworkPolicy","mcs-zap-egress","-n",NS,absent=True)
         if old is None: create(scan_policy)
         else: need(old["spec"]==scan_policy["spec"],"company peer drift requires requalification")
-        script=script[:script.index("cd /tmp/source")] + "cd /tmp/source\nexport PATH=/tooling:/usr/local/bin:/usr/bin:/bin\nexport LD_LIBRARY_PATH=/tooling\npython -B tools/zap_ci.py\n"
+        script=script[:script.index("cd /tmp/source")] + "cd /tmp/source\nexport PATH=/tooling:/usr/local/bin:/usr/bin:/bin\nexport LD_LIBRARY_PATH=/tooling\npython -B tools/test_zap_ci.py\npython -B tools/zap_ci.py\n"
     container = {"name":"contracts","image":image,"command":["/init/tini","-g","--","sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
       "resources":{"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"512Mi"}},
       "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},

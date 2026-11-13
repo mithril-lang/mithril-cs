@@ -376,7 +376,7 @@
       "git_blob": "60136fbca378d8cd3259f8c94bb6e14c2b489c7a",
       "source_sha256": "bcc0e708810ac9b1fec5c55e784be3e2e20c0e9c3b0964d91f4c52fc2b252c63",
       "owned_path": "scanner/plugin/tools.py",
-      "owned_sha256": "a3e83423b62ed45746d48cb2b08bab69520f8e615ef0d831d10f8cef2daa1014"
+      "owned_sha256": "41806805e15ad8c8caf2604e11c1ae1d892e3fcfba97a07b50223208521a7a3b"
     },
     {
       "source_path": "plugin/zap_api.py",

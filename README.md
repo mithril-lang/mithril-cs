@@ -38,4 +38,4 @@ VKE qualification: JVM and Babashka each15 tests/82 assertions; ClojureScript10 
 
 Delivery tracking: [MITHRIL-2471](https://linear.app/kotobalabs/issue/MITHRIL-2471). Existing Mithril Fund security CLI/evidence integration remains under MITHRIL-2203. This repository does not depend on private Fund source.
 
-Pinned Web Scanner integration: [VKE recipe, actual HTTP controls and report semantics](docs/zap-ci.md). This optional lane preserves the independent upstream source and original test floor; qualification results are tracked under [MITHRIL-2485](https://linear.app/kotobalabs/issue/MITHRIL-2485).
+Pinned Web Scanner integration: [VKE recipe, actual HTTP controls and report semantics](docs/zap-ci.md). This optional lane uses a Mithril-owned source snapshot and Babashka/Python, with no Kotoba/KBB runtime dependency. It preserves original test cases and floor; qualification results are tracked under [MITHRIL-2485](https://linear.app/kotobalabs/issue/MITHRIL-2485).

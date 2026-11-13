@@ -43,6 +43,7 @@ def collect(checkout):
         return {"error": "neither bb nor clojure on PATH"}
 '''+text[end:]
    text=text.replace("kotoba.zap-proxy","mithril.web-scanner")
+   text="\n".join(line for line in text.splitlines() if not any(marker in line for marker in ["# Engine selection:", "# clojure -M cannot", "# only the fallback"]))+"\n"
    text=text[text.index("from __future__"):];text='"""Standalone Mithril scanner host adapter; Babashka preferred, Clojure fallback."""\n'+text
   elif path=="plugin/zap_api.py":
    text=text.replace('shutil.which("kbb")','shutil.which("bb")').replace('"kbb scanner engine unavailable"','"Babashka scanner engine unavailable"')
