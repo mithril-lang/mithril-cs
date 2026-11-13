@@ -1,7 +1,7 @@
 """Actual HTTP fidelity and redirect/scope regression cases for standalone transport."""
 import http.server,json,os,pathlib,sys,tempfile,threading,unittest
 sys.path.insert(0,str(pathlib.Path(__file__).parent))
-from http_fetch import fetch
+from http_fetch import fetch,response_edn
 from plugin.test_zap_api import ledger
 class HTTPContracts(unittest.TestCase):
  def setUp(self):
@@ -30,6 +30,10 @@ class HTTPContracts(unittest.TestCase):
   r=fetch(self.url+"/app/","reviewed-1","passive",5)
   self.assertEqual(r["headers"]["content-security-policy"],"default-src 'none'")
   self.assertEqual(r["body"],"Mithril's response 日本語")
+ def test_edn_envelope_and_string_headers(self):
+  out=response_edn({"status":200,"headers":{"content-security-policy":"default-src 'none'"},"body":"Mithril's"})
+  self.assertTrue(out.startswith('{:status 200 :headers {"content-security-policy"'))
+  self.assertIn("default-src 'none'",out);self.assertIn("Mithril's",out)
  def test_no_redirect_follow(self):
   r=fetch(self.url+"/app/redirect","reviewed-1","passive",5)
   self.assertEqual(r["status"],302);self.assertEqual(self.hits,["/app/redirect"])

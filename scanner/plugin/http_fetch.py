@@ -23,6 +23,8 @@ def edn(x):
  if isinstance(x,list):return "["+" ".join(map(edn,x))+"]"
  if isinstance(x,int):return str(x)
  return json.dumps(x,ensure_ascii=True)
+def response_edn(response):
+ return "{:status "+str(response["status"])+" :headers "+edn(response["headers"])+" :body "+edn(response["body"])+"}"
 if __name__=="__main__":
- try:print(edn(fetch(sys.argv[1],sys.argv[2],sys.argv[3],int(sys.argv[4]))))
+ try:print(response_edn(fetch(sys.argv[1],sys.argv[2],sys.argv[3],int(sys.argv[4]))))
  except PermissionError:sys.exit(3)

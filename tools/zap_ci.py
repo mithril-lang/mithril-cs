@@ -26,7 +26,7 @@ def summary(label,doc):
  findings=doc["findings"]
  groups=collections.Counter((f["rule_id"],f["severity"],f["title"]) for f in findings)
  return {"label":label,"target":doc["target"],"collection_state":doc["collection_state"],
-   "coverage":doc["coverage"],"counts":doc["counts"],"total":doc["total"],
+   "coverage":doc["coverage"],"http_status_counts":doc.get("http_status_counts",{}),"counts":doc["counts"],"total":doc["total"],
    "rules":[{"rule_id":rid,"severity":sev,"title":title,"occurrences":n}
             for (rid,sev,title),n in sorted(groups.items())],
    "limitations":doc["limitations"],"report_sha256":hashlib.sha256(json.dumps(doc,sort_keys=True).encode()).hexdigest(),

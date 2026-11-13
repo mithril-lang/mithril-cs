@@ -1,6 +1,6 @@
 (ns mithril.web-scanner.plugin-entry
   "Fixed standalone Python HTTP transport; no target or runtime supplied code."
-  (:require [clojure.edn :as edn] [clojure.java.shell :as shell]
+  (:require [clojure.edn :as edn] [clojure.string :as strings] [clojure.java.shell :as shell]
             [mithril.web-scanner.spider :as spider] [mithril.web-scanner.passive :as passive]
             [mithril.web-scanner.active :as active] [mithril.web-scanner.authorization :as auth]
             [mithril.web-scanner.report :as report]))
@@ -23,4 +23,10 @@
                               (when active? (mapcat #(active/active-scan {:url (:url %) :send-fn fetch
                                                        :approval-id approval-id :max-pages max-pages}) pages))))
         doc (report/report-edn {:target target :findings findings :crawl crawl :mode mode :max-pages max-pages})]
-    (println (if (= "json" (System/getenv "ZAP_PROXY_OUTPUT_FORMAT")) (report/report-json doc) (pr-str doc)))))
+    (println (if (= "json" (System/getenv "ZAP_PROXY_OUTPUT_FORMAT"))
+               (let [rendered (report/report-json doc)]
+                 (str (subs rendered 0 (dec (count rendered)))
+                      ",\"http_status_counts\":{"
+                      (strings/join "," (for [[status n] (frequencies (map :status pages))]
+                                          (str "\"" status "\":" n))) "}}"))
+               (pr-str doc))))))
