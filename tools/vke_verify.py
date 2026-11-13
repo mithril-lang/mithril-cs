@@ -53,6 +53,7 @@ def main():
     p.add_argument("--node", required=True)
     p.add_argument("--node-uid", required=True)
     p.add_argument("--baseline", required=True, help="existing owner-reviewed CI platform policy JSON")
+    p.add_argument("--additional-slot", action="store_true", help="Preserve exact legacy unknown reservation (4GiB/2CPU); add bounded CS slot")
     args = p.parse_args()
     need(re.fullmatch("[0-9a-f]{40}", args.source), "source revision required")
     k = ["kubectl", "--kubeconfig", args.kubeconfig, "--request-timeout=12s"]
@@ -108,9 +109,22 @@ def main():
     need(roster.get(args.node) == args.node_uid, "node identity changed")
     node = next(n for n in nodes if n["metadata"]["name"] == args.node)
     platform = {}
+    legacy_uid = "ac94ce8f-c3b7-4b53-b538-11bfa04600cb"
+    legacy_job_uid = "e027dce0-eb67-4880-8f8f-c3d37ff80f93"
+    def reserved_legacy(pod):
+        if not args.additional_slot or pod["metadata"]["uid"] != legacy_uid: return False
+        need(args.node_uid == "86f1c2a3-01f6-4ba9-92c0-9da0c4f3b21f"
+             and pod["metadata"]["namespace"] == "mithril-ci-bounded"
+             and digest(pod["spec"]) == "fb2d570a949105a8b0dd5459904ff466bbafe6958115b238365b0199754491f6"
+             and pod.get("status",{}).get("phase") == "Failed"
+             and not pod["metadata"].get("deletionTimestamp")
+             and any(o.get("uid") == legacy_job_uid and o.get("controller") is True for o in pod["metadata"].get("ownerReferences",[])),
+             "legacy reservation changed; owner reconciliation required")
+        return True
     pods = complete(get("pods", "-A"), "Pod")
     for pod in pods:
         if pod["spec"].get("nodeName") != args.node or terminal(pod): continue
+        if reserved_legacy(pod): continue  # Remains UNKNOWN and reserves 4GiB/2CPU, never reclassified as terminal.
         need(pod["metadata"]["namespace"] == "kube-system", "CI node has non-platform workload")
         need(pod.get("status", {}).get("phase") == "Running" and
              all(s.get("ready") for s in pod["status"].get("containerStatuses", [])), "platform not ready")
@@ -136,10 +150,14 @@ def main():
         ps = complete(get("pods", "-A"), "Pod")
         js = complete(get("jobs", "-A"), "Job")
         seen = set()
+        reserved_seen = False
         for pod in ps:
             spec = pod["spec"]
             if spec.get("nodeName") and spec["nodeName"] != args.node: continue
             if not spec.get("nodeName") and any(node["metadata"]["labels"].get(x) != v for x, v in spec.get("nodeSelector", {}).items()): continue
+            if reserved_legacy(pod):
+                reserved_seen = True
+                continue
             if terminal(pod): continue
             uid = pod["metadata"]["uid"]
             if uid in platform:
@@ -148,7 +166,13 @@ def main():
                 seen.add(uid); continue
             need(own is not None and any(o.get("uid") == own for o in pod["metadata"].get("ownerReferences", [])), "concurrent workload hold")
         need(seen == set(platform), "platform disappeared")
+        if args.additional_slot: need(reserved_seen, "legacy reservation missing; requalify instead of clearing hold")
         for job in js:
+            if args.additional_slot and job["metadata"]["uid"] == legacy_job_uid:
+                need(digest(job["spec"]) == "020378a25cdb70b41b659a41bf4afad4c9154c3721df0cd4495a90e8418bb4c0"
+                     and not job.get("status",{}).get("active") and not job.get("status",{}).get("terminating")
+                     and any(c.get("type") == "Failed" and c.get("status") == "True" for c in job.get("status",{}).get("conditions",[])),
+                     "legacy source/authority changed")
             spec = job["spec"]["template"]["spec"]
             if spec.get("nodeName") and spec["nodeName"] != args.node: continue
             if any(node["metadata"]["labels"].get(x) != v for x, v in spec.get("nodeSelector", {}).items()): continue
@@ -158,7 +182,7 @@ def main():
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
             need(-5 <= age <= 30, "stale metrics")
-        need(s["memory"]["availableBytes"] >= 5 * GIB and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
+        need(s["memory"]["availableBytes"] >= (5.5 if args.additional_slot else 5) * GIB and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
         need(s["cpu"]["usageNanoCores"] <= (1500000000 if own else 500000000), "CPU hold")
         if lease_uid:
             lease = get("lease", LEASE, "-n", LNS)
@@ -179,7 +203,7 @@ def main():
         existing = get(obj["kind"], obj["metadata"]["name"], "-n", NS, absent=True)
         if existing is None: create(obj)
         else: need(existing["spec"] == obj["spec"], "existing lane config mismatch")
-    ledger = {"operation":operation,"source":args.source,"phase":"pre-submit","job":name,"image":BB,"initial":initial}
+    ledger = {"operation":operation,"source":args.source,"phase":"pre-submit","job":name,"image":BB,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
     journal = {"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name+"-journal","namespace":NS},"data":{"state":json.dumps(ledger)}}
     create(journal)
     lease = create({"apiVersion":"coordination.k8s.io/v1","kind":"Lease","metadata":{"name":LEASE,"namespace":LNS,"annotations":{"mithril.fund/owner_issue":"MITHRIL-2471","mithril.fund/source":args.source}},"spec":{"holderIdentity":operation,"leaseDurationSeconds":900,"acquireTime":datetime.datetime.now(datetime.timezone.utc).isoformat()}})
@@ -199,7 +223,7 @@ def main():
       "resources":{"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"512Mi"}},
       "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
       "volumeMounts":[{"name":"source","mountPath":"/input","readOnly":True},{"name":"scratch","mountPath":"/tmp"}]}
-    spec = {"restartPolicy":"Never","automountServiceAccountToken":False,"enableServiceLinks":False,
+    spec = {"restartPolicy":"Never","preemptionPolicy":"Never","automountServiceAccountToken":False,"enableServiceLinks":False,
       "nodeSelector":{"kubernetes.io/hostname":args.node},"tolerations":[{"key":"mithril.fund/execution-lane","value":"ci-profile","operator":"Equal","effect":"NoSchedule"}],
       "securityContext":{"runAsNonRoot":True,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000,"seccompProfile":{"type":"RuntimeDefault"}},
       "containers":[container],"volumes":[{"name":"source","configMap":{"name":cmname}},{"name":"scratch","emptyDir":{"sizeLimit":"512Mi"}}]}
