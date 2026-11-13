@@ -481,7 +481,7 @@
       "git_blob": "893512498850ef918c033dd553cc29e8b5abd3a9",
       "source_sha256": "18ce05f1186c7c32eab10b0d43744d27e91cc973c2e8625ef655e58042e5da5f",
       "owned_path": "scanner/src/mithril/web_scanner/spider.cljc",
-      "owned_sha256": "bf19745922f15ee6a1bf90413df96b2e14dbfd3cca137e3272ef59bb5b365253"
+      "owned_sha256": "da5d9ffea1cd18bead5ea702eaacc5d1aff6518f74b54f4cd4819e9962877503"
     },
     {
       "source_path": "test/kotoba/zap_proxy/authorization_test.cljc",

@@ -35,7 +35,7 @@
       ;; Platform URL parsers resolve relative paths and query-only links
       ;; against the response URL. String concatenation missed nested paths.
       #?(:cljs (str (js/URL. href base))
-         :clj (str (.resolve (java.net.URI/create base) href)))
+         :clj (if (str/starts-with? href "?") (str (first (str/split base #"[?#]" 2)) href) (str (.resolve (java.net.URI/create base) href))))
       (catch #?(:cljs :default :clj Throwable) _ nil))))
 
 (defn extract-candidates

@@ -26,6 +26,9 @@ def collect(checkout):
     text=text.replace("(.parse js/JSON ","(json/parse-string ")
     text=text.replace("(.-collection_state json)",'(get json "collection_state")')
     text=text.replace("(.-transport_failures (.-coverage json))",'(get-in json ["coverage" "transport_failures"])')
+   if path.endswith("spider.cljc"):
+    text=text.replace(':clj (str (.resolve (java.net.URI/create base) href))',
+      ':clj (if (str/starts-with? href "?") (str (first (str/split base #"[?#]" 2)) href) (str (.resolve (java.net.URI/create base) href)))')
    after=re.findall(r"\(deftest\s+([^\s()]+)",text);assert before==after
    test_after.extend(after)
   elif path=="plugin/tools.py":
