@@ -53,8 +53,10 @@ def main():
     p.add_argument("--node", required=True)
     p.add_argument("--node-uid", required=True)
     p.add_argument("--baseline", required=True, help="existing owner-reviewed CI platform policy JSON")
+    p.add_argument("--python-contracts", action="store_true", help="Run the bounded router recovery contract suite")
     p.add_argument("--additional-slot", action="store_true", help="Preserve exact legacy unknown reservation (4GiB/2CPU); add bounded CS slot")
     args = p.parse_args()
+    image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9" if args.python_contracts else BB
     need(re.fullmatch("[0-9a-f]{40}", args.source), "source revision required")
     k = ["kubectl", "--kubeconfig", args.kubeconfig, "--request-timeout=12s"]
     def kube(method, *arguments, body=None, absent=False):
@@ -228,7 +230,7 @@ def main():
         priority = kube("create","-f","-","-o","json",body=obj)
     need(priority.get("value")==-10 and priority.get("globalDefault", False) is False
          and priority.get("preemptionPolicy")=="Never", "priority class drift")
-    ledger = {"operation":operation,"source":args.source,"phase":"pre-submit","job":name,"image":BB,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
+    ledger = {"operation":operation,"source":args.source,"phase":"pre-submit","job":name,"image":image,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
     journal = {"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name+"-journal","namespace":NS},"data":{"state":json.dumps(ledger)}}
     create(journal)
     lease = create({"apiVersion":"coordination.k8s.io/v1","kind":"Lease","metadata":{"name":LEASE,"namespace":LNS,"annotations":{"mithril.fund/owner_issue":"MITHRIL-2471","mithril.fund/source":args.source}},"spec":{"holderIdentity":operation,"leaseDurationSeconds":900,"acquireTime":datetime.datetime.now(datetime.timezone.utc).isoformat()}})
@@ -259,7 +261,12 @@ child=$!; sleep 0.2; kill -TERM "$child"; wait "$child"
 echo TINI_FIXTURE_PASS
 """
 
-    container = {"name":"contracts","image":BB,"command":["/init/tini","-g","--","sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
+    if args.python_contracts:
+        script = script[:script.index("cd /tmp/source")] + r"""
+cd /tmp/source
+python -I -B tools/router_recover.py --selftest
+"""
+    container = {"name":"contracts","image":image,"command":["/init/tini","-g","--","sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
       "resources":{"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"512Mi"}},
       "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
       "volumeMounts":[{"name":"init","mountPath":"/init","readOnly":True},{"name":"source","mountPath":"/input","readOnly":True},{"name":"scratch","mountPath":"/tmp"}]}
@@ -285,12 +292,12 @@ echo TINI_FIXTURE_PASS
             pod=ps[0]
             need(any(o.get("uid")==own for o in pod["metadata"].get("ownerReferences",[])), "Pod owner mismatch")
             statuses=pod["status"]["containerStatuses"]
-            need(len(statuses)==1 and statuses[0]["imageID"].split("@")[-1]==BB.split("@")[-1], "runtime image mismatch")
+            need(len(statuses)==1 and statuses[0]["imageID"].split("@")[-1]==image.split("@")[-1], "runtime image mismatch")
             logs=subprocess.run(k+["logs",pod["metadata"]["name"],"-n",NS,"--limit-bytes=65536"],capture_output=True,text=True,timeout=20)
             need(logs.returncode==0, "logs unavailable; keep lease")
             success=any(c.get("type")=="Complete" and c.get("status")=="True" for c in conditions) and all(s.get("restartCount")==0 and s["state"]["terminated"]["exitCode"]==0 for s in statuses)
             ledger.update(phase="terminal",success=success,pod_uid=pod["metadata"]["uid"],log_sha256=hashlib.sha256(logs.stdout.encode()).hexdigest(),
-                          image=BB,source_tree=commit["tree"]["sha"],source_manifest_sha256=digest(manifest))
+                          image=image,source_tree=commit["tree"]["sha"],source_manifest_sha256=digest(manifest))
             # Bounded logs remain in the retained Pod. Only metadata enters journal.
             old=get("ConfigMap",name+"-journal","-n",NS)
             old["data"]["state"]=json.dumps(ledger)
