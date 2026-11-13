@@ -1,26 +1,11 @@
-"""Hermetic KBB adapter and actual HTTP dogfood for the pinned first-party scanner."""
+"""Standalone Babashka scanner contracts and first-party passive HTTP dogfood."""
 import collections, hashlib, http.server, json, os, pathlib, re, resource, subprocess, sys, tempfile, threading, time
-ROOT=pathlib.Path(os.environ.get("ZAP_RUNTIME","/tmp/zap-runtime"))
+ROOT=pathlib.Path(__file__).resolve().parents[1]
 SCANNER=ROOT/"scanner"
 def run(argv,**kw):
  p=subprocess.run(argv,capture_output=True,text=True,timeout=600,**kw)
  if p.returncode: raise RuntimeError("command failed: "+json.dumps(argv)+"\n"+p.stdout[-8000:]+"\n"+p.stderr[-4000:])
  return p.stdout
-def launcher(args):
- m=json.loads((ROOT/"manifest.json").read_text())
- cp=[str(SCANNER/p) for p in ["src","resources","test"]]+[str(ROOT/"stdlib"/"lib"/r/"src") for r in m["stdlib_roots"]]
- base=["node","--stack-size=8000",str(ROOT/"engine"/"cli.js"),"--classpath",":".join(cp)]
- empty=ROOT/"empty";empty.mkdir(exist_ok=True)
- if args==["-M:test"]:
-  nss=[re.search(r"\(ns\s+([^\s()]+)",p.read_text())[1] for p in sorted((SCANNER/"test").rglob("*_test.cljc"))]
-  quoted=" ".join("'"+s for s in nss)
-  expr="(.chdir js/process "+json.dumps(str(SCANNER))+") (require '[cljs.test :as t] "+" ".join("'"+s for s in nss)+") (defmethod t/report [::t/default :end-run-tests] [m] (when-not (t/successful? m) (js/process.exit 1))) (t/run-tests "+quoted+")"
-  cmd=base+["-e",expr]
- elif len(args)==3 and args[:2]==["-M","-m"] and args[2] in ["kotoba.zap-proxy.kbb-scan"]:
-  cmd=base+["-m",args[2]]
- else: raise RuntimeError("unsupported hermetic KBB invocation")
- os.chdir(empty)
- os.execvp(cmd[0],cmd)
 def ledger(path,target,approval="ci-2485"):
  now=int(time.time())
  record={"id":approval,"status":"approved","approval_method":"human_verified_written_scope",
@@ -42,15 +27,16 @@ def summary(label,doc):
    "finding_status":"needs-review","certificate_eligible":False}
 def main():
  os.environ.update(ZAP_PROXY_REPO_ROOT=str(SCANNER),ZAP_PROXY_REPO=str(SCANNER),PYTHONDONTWRITEBYTECODE="1")
- bins=ROOT/"bin";bins.mkdir(exist_ok=True)
- wrapper=bins/"kbb";wrapper.write_text("#!"+sys.executable+"\nimport runpy,sys\nsys.argv=["+repr(__file__)+",'--kbb']+sys.argv[1:]\nrunpy.run_path("+repr(__file__)+",run_name='__main__')\n");wrapper.chmod(0o755)
- os.environ["PATH"]=str(bins)+":"+os.environ["PATH"]
- out=run(["bash","scripts/coverage-gate.sh"],cwd=SCANNER)
+ nss=[re.search(r"\(ns\s+([^\s()]+)",p.read_text())[1] for p in sorted((SCANNER/"test").rglob("*_test.cljc"))]
+ quoted=" ".join("'"+s for s in nss)
+ expr="(require '[clojure.test :as t] "+" ".join("'"+s for s in nss)+") (let [r (t/run-tests "+quoted+")] (when-not (and (t/successful? r) (>= (:test r) 311) (>= (+ (:pass r) (:fail r) (:error r)) 1441)) (System/exit 1)))"
+ out=run(["bb","--classpath","src:resources:test","-e",expr],cwd=SCANNER)
  print(out,flush=True)
- match=re.search(r"tests=(\d+) assertions=(\d+)",out)
- if not match or int(match[1])<311 or int(match[2])<1441: raise RuntimeError("original test floor missing")
+ match=re.search(r"Ran (\d+) tests containing (\d+) assertions",out)
+ if not match or int(match[1])<311 or int(match[2])<1441:raise RuntimeError("original assertion floor missing")
+ print(run([sys.executable,"scripts/check-cwe-matrix.py"],cwd=SCANNER),flush=True)
  # The upstream Python suites are run unmodified, including their actual engine HTTP case.
- testcode="import unittest; s=unittest.defaultTestLoader.loadTestsFromNames(['plugin.test_tools','plugin.test_zap_api']); r=unittest.TextTestRunner(verbosity=2).run(s); print('PYTHON_TESTS',r.testsRun,'SKIPPED',len(r.skipped)); raise SystemExit(0 if r.wasSuccessful() and not r.skipped else 1)"
+ testcode="import unittest; s=unittest.defaultTestLoader.loadTestsFromNames(['plugin.test_tools','plugin.test_zap_api','plugin.test_http_fetch']); r=unittest.TextTestRunner(verbosity=2).run(s); print('PYTHON_TESTS',r.testsRun,'SKIPPED',len(r.skipped)); raise SystemExit(0 if r.wasSuccessful() and not r.skipped else 1)"
  print(run([sys.executable,"-B","-c",testcode],cwd=SCANNER),flush=True)
  sys.path.insert(0,str(SCANNER))
  from plugin.zap_api import _run_engine,Scan
@@ -90,9 +76,9 @@ def main():
    assert 1<=doc["coverage"]["fetched_pages"]<=5,"no actual first-party HTTP response"
    results.append(summary("company-public-passive",doc))
   finally:server.shutdown();server.server_close();thread.join(timeout=2)
- manifest=json.loads((ROOT/"manifest.json").read_text())
- result={"schema_version":1,"issue":"MITHRIL-2485","pins":manifest["pins"],
-  "tests":{"kbb":int(match[1]),"assertions":int(match[2]),"upstream_coverage_gate":"passed","python_skipped":0},
+ manifest=json.loads((SCANNER/"PROVENANCE.json").read_text())
+ result={"schema_version":1,"issue":"MITHRIL-2485","provenance":{"repository":manifest["source_repository"],"revision":manifest["source_revision"]},
+  "tests":{"babashka":int(match[1]),"assertions":int(match[2]),"original_test_floor":"passed","python_skipped":0},
   "authorization_denial":"passed","reports":results,
   "child_peak_rss_kib":resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
   "scope":"passive GET-only; no public active probes; no authentication; maximum5pages"}
@@ -100,5 +86,4 @@ def main():
  print("ZAP_CI_RESULT "+json.dumps(result,ensure_ascii=False),flush=True)
  print("ZAP_CI_PASS",flush=True)
 if __name__=="__main__":
- if sys.argv[1:2]==["--kbb"]:launcher(sys.argv[2:])
- else:main()
+ main()
