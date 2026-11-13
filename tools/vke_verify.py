@@ -199,7 +199,7 @@ def main():
         need(r.returncode == 0, "namespace creation unknown")
     for obj in [
         {"apiVersion":"v1","kind":"ResourceQuota","metadata":{"name":"cs-qualification","namespace":NS},"spec":{"hard":{"pods":"1","limits.cpu":"1","requests.cpu":"1","limits.memory":"1536Mi","requests.memory":"1536Mi","limits.ephemeral-storage":"2Gi","requests.ephemeral-storage":"2Gi","persistentvolumeclaims":"0","services.loadbalancers":"0","services.nodeports":"0"}}},
-        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"deny-all","namespace":NS},"spec":{"podSelector":{},"policyTypes":["Ingress","Egress"],"ingress":[],"egress":[]}}]:
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"deny-all","namespace":NS},"spec":{"podSelector":{},"policyTypes":["Ingress","Egress"]}}]:
         existing = get(obj["kind"], obj["metadata"]["name"], "-n", NS, absent=True)
         if existing is None: create(obj)
         else: need(existing["spec"] == obj["spec"], "existing lane config mismatch")
