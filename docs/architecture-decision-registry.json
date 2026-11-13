@@ -92,8 +92,8 @@
       "decision_owner": "Jun",
       "scope": "Mithril CS VKE CI and bounded first-party passive HTTP verification",
       "decision": "Own a provenance-pinned scanner source snapshot; use Babashka, Clojure standard libraries and fixed Python HTTP transport. No Kotoba/KBB/compiler/stdlib runtime or external source resolution in CI.",
-      "deployment_status": "CI_CANDIDATE_VERIFIED_PUBLIC_APPLICATION_ACCESS_BLOCKED",
-      "review_state": "SOURCE_RUNTIME_VERIFIED_APPLICATION_QUALIFICATION_OPEN",
+      "deployment_status": "CI_INTEGRATED_BOUNDED_PUBLIC_HTTP_CANDIDATE_VERIFIED",
+      "review_state": "STANDALONE_CI_VERIFIED_PUBLIC_PARTIAL_REVIEW_OPEN",
       "source_refs": [
         "cs-scanner-2485-adr",
         "cs-scanner-2485-issue"
@@ -112,7 +112,7 @@
           "id": "cs-scan-a2",
           "kind": "observed_limit",
           "statement": "HTTP403 is receipt of an error response, not application scan acceptance or security clearance.",
-          "status": "APPLICATION_COVERAGE_BLOCKED",
+          "status": "REPORT_GUARD_VERIFIED_DEFAULT_CLIENT_BLOCK_FIXED",
           "source_refs": [
             "cs-scanner-2485-issue"
           ]
@@ -155,8 +155,8 @@
           "kind": "unmeasured",
           "observed_at": "2026-11-13",
           "sample_size": null,
-          "workload": "Anonymous public mithril.fund GET received403; no settled billing or app response verification",
-          "unknown_reason": "Access-blocked; error-page candidates cannot qualify application security",
+          "workload": "Company passive source96fc77b4:5attempts,4HTTP200responses,1transport failure,51queued; full app security/cost unmeasured",
+          "unknown_reason": "Bounded passive partial scan only; candidate review and normalized production billing not qualified",
           "source_refs": [
             "cs-scanner-2485-issue"
           ]
@@ -170,6 +170,20 @@
           "observed_at": "2026-11-13",
           "sample_size": 1,
           "workload": "Linux getrusage CHILDREN maxrss at617f450; not aggregate Pod peak",
+          "unknown_reason": null,
+          "source_refs": [
+            "cs-scanner-2485-issue"
+          ]
+        },
+        {
+          "id": "cs-scan-m5",
+          "name": "Company passive received-response candidates",
+          "value": 62,
+          "unit": "unvalidated candidate occurrences",
+          "kind": "bounded_public_vke_observation",
+          "observed_at": "2026-11-13",
+          "sample_size": 1,
+          "workload": "Source96fc77b4,4HTTP200 responses,5attempt cap,1failure,51unattempted; not62confirmed vulnerabilities",
           "unknown_reason": null,
           "source_refs": [
             "cs-scanner-2485-issue"
@@ -190,7 +204,7 @@
           "response": "Immediate report/gate review; retain unknown coverage and original response status"
         }
       ],
-      "next_action": "Verify actual integrated main. MITHRIL-1836 owns authorized application route/staging acceptance behind403, broader scanner scope and durable evidence custody; no WAF weakening or production security claim.",
+      "next_action": "Verify final main. MITHRIL-1836 owns capped-scan failure/coverage analysis, candidate deduplication/context review, broader authorized app/browser/auth qualification and private evidence custody. Default Python User-Agent BIC block resolved with descriptive Mithril identity; no server rule change.",
       "responsible_owner": "Codex CI source; existing1836 product/security owner; independent reviewer UNKNOWN"
     }
   ]
