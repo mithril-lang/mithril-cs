@@ -293,7 +293,7 @@ python -I -B tools/router_recover.py --selftest
         script = script[:script.index("cd /tmp/source")] + r"""
 cd /tmp/source
 export PATH=/tooling:/opt/java/openjdk/bin:/usr/local/bin:/usr/bin:/bin
-export JAVA_TOOL_OPTIONS=-Xmx640m
+export JAVA_TOOL_OPTIONS="-Xmx640m -Duser.home=/tmp"
 clojure -Sdescribe
 clojure -M:test
 clojure -M:cljs-test
