@@ -333,7 +333,7 @@ echo ALL_RUNTIMES_PASS
         old=get("NetworkPolicy","mcs-zap-egress","-n",NS,absent=True)
         if old is None: create(scan_policy)
         else: need(old["spec"]==scan_policy["spec"],"company peer drift requires requalification")
-        script=script[:script.index("cd /tmp/source")] + "cd /tmp/source\nexport PATH=/tooling:/usr/local/bin:/usr/bin:/bin\nexport LD_LIBRARY_PATH=/tooling\npython -B tools/zap_snapshot.py /tmp/zap-runtime " + " ".join("/zap-input-"+str(i)+"/part" for i in range(len(zap_mounts))) + "\npython -B tools/zap_ci.py\n"
+        script=script[:script.index("cd /tmp/source")] + "cd /tmp/source\nexport PATH=/tooling:/usr/local/bin:/usr/bin:/bin\nexport LD_LIBRARY_PATH=/tooling\npython -B tools/zap_snapshot.py /tmp/zap-runtime " + " ".join("/zap-input-"+str(i)+"/part" for i in range(len(zap_mounts))) + "\npython -B tools/test_zap_ci.py\npython -B tools/zap_ci.py\n"
     container = {"name":"contracts","image":image,"command":["/init/tini","-g","--","sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
       "resources":{"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"512Mi"}},
       "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
@@ -363,8 +363,8 @@ echo ALL_RUNTIMES_PASS
         container["volumeMounts"].append({"name":"tooling","mountPath":"/tooling"})
         spec["volumes"].append({"name":"tooling","emptyDir":{"sizeLimit":"256Mi"}})
         spec["volumes"][-2]["emptyDir"]["sizeLimit"]="1Gi"
-        for i,cm in enumerate(zap_mounts):
-            spec["volumes"].append({"name":"zap-input-"+str(i),"configMap":{"name":cm}})
+        for i,zap_cm_name in enumerate(zap_mounts):
+            spec["volumes"].append({"name":"zap-input-"+str(i),"configMap":{"name":zap_cm_name}})
             container["volumeMounts"].append({"name":"zap-input-"+str(i),"mountPath":"/zap-input-"+str(i),"readOnly":True})
         spec["initContainers"]=[{"name":"install-node","image":"docker.io/library/node@sha256:47725aca53d3295ec2d3be8f62726599b3033cc262edc2c7e429909b3ac599fc",
             "command":["sh","-c","cp /usr/local/bin/node /tooling/node; cp /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /tooling/; cp /lib/x86_64-linux-gnu/libgcc_s.so.1 /tooling/"],

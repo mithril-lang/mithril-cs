@@ -24,7 +24,7 @@ def acquire():
    if hashlib.sha1(b"blob "+str(len(b)).encode()+bytes([0])+b).hexdigest()!=x["sha"]: raise RuntimeError("Git blob mismatch")
    return b
   if group=="scanner":
-   selected=[p for p in rows if p.startswith(("src/","test/","resources/","plugin/")) or p in
+   selected=[p for p in rows if p.startswith(("src/","test/","resources/","plugin/","kotoba/src/")) or p in
              ["scripts/coverage-gate.sh","scripts/check-cwe-matrix.py","deps.edn","nbb.edn","LICENSE"]]
   elif group=="engine":
    selected=[p for p in rows if p.startswith(("lib/","node_modules/import-meta-resolve/")) or p in ["cli.js","index.mjs","package.json","LICENSE"]]
