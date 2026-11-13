@@ -109,7 +109,7 @@ def main():
             need(member.isfile() and path in expected and path not in files
                  and member.size <= 512*1024, "source archive entry")
             raw = archive.extractfile(member).read(512*1024+1)
-            need(hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\\0"+raw).hexdigest() == expected[path],
+            need(hashlib.sha1(b"blob "+str(len(raw)).encode()+bytes([0])+raw).hexdigest() == expected[path],
                  "source blob mismatch")
             files[path] = raw.decode("utf-8")
     need(set(files) == set(expected), "incomplete source archive")
