@@ -1,0 +1,3 @@
+{:paths ["src" "test"]
+ :tasks {test {:task (exec 'mithril.cs.test-runner/run)}
+         cs {:task (apply (requiring-resolve 'mithril.cs.cli/-main) *command-line-args*)}}}

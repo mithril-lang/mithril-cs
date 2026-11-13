@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "registry_updated_at": "2026-11-13",
+  "coverage": "Independent CS engine decision only; additive entry pending owning Fund registry integration",
+  "sources": [
+    {
+      "id": "cs-adr-0001",
+      "type": "adr",
+      "url": "https://github.com/mithril-lang/mithril-cs/blob/main/docs/architecture.md"
+    },
+    {
+      "id": "linear-2471",
+      "type": "linear",
+      "url": "https://linear.app/kotobalabs/issue/MITHRIL-2471"
+    },
+    {
+      "id": "strix-reference",
+      "type": "source",
+      "url": "https://github.com/usestrix/strix/tree/928b1ca66ea5a00e7fe83f0fce84c7d557ff8091",
+      "revision": "928b1ca66ea5a00e7fe83f0fce84c7d557ff8091"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "cs-independent-cljc-engine",
+      "title": "Independent CLJC security engine",
+      "decision_status": "accepted_initial_source_architecture",
+      "decided_at": "2026-11-13",
+      "decision_owner": "Jun",
+      "scope": "mithril-lang/mithril-cs initial source only",
+      "decision": "Portable CLJC policy/rules with explicit CLJ filesystem adapter; retain existing Fund engine and authority",
+      "deployment_status": "SOURCE_ONLY_NO_SERVICE_CUTOVER",
+      "review_state": "INITIAL_VALIDATION_REQUIRED",
+      "source_refs": [
+        "cs-adr-0001",
+        "linear-2471",
+        "strix-reference"
+      ],
+      "assumptions": [
+        {
+          "id": "cs-a1",
+          "kind": "design_assumption",
+          "statement": "Portable policy fits JVM and CLJS without executing target code",
+          "status": "VALIDATION_PENDING",
+          "source_refs": [
+            "cs-adr-0001"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "id": "cs-m1",
+          "name": "Qualified portable test executions",
+          "value": null,
+          "unit": "runs",
+          "kind": "unmeasured",
+          "observed_at": null,
+          "sample_size": null,
+          "workload": "Exact source JVM/BB/CLJS",
+          "unknown_reason": "Not executed at initial authoring",
+          "source_refs": [
+            "linear-2471"
+          ]
+        }
+      ],
+      "review_triggers": [
+        {
+          "id": "cs-t1",
+          "type": "event",
+          "condition": "Changed trust boundary, failed portability or isolation/authority failure",
+          "response": "Revisit ADR and integration contract before active service adoption"
+        }
+      ],
+      "next_action": "Exact-source test execution and versioned Fund translation fixtures; add this incremental decision to owning Fund registry without overwriting other owners' work",
+      "responsible_owner": "Codex source; independent reviewer UNKNOWN"
+    }
+  ]
+}

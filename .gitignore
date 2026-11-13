@@ -1,0 +1,10 @@
+/.cpcache/
+/.clj-kondo/
+/.lsp/
+/target/
+/out/
+/node_modules/
+*.log
+.env*
+/reports/
+/runs/
