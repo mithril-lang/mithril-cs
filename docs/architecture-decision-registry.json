@@ -18,6 +18,16 @@
       "type": "source",
       "url": "https://github.com/usestrix/strix/tree/928b1ca66ea5a00e7fe83f0fce84c7d557ff8091",
       "revision": "928b1ca66ea5a00e7fe83f0fce84c7d557ff8091"
+    },
+    {
+      "id": "cs-scanner-2485-adr",
+      "type": "adr",
+      "url": "https://github.com/mithril-lang/mithril-cs/blob/617f450032b25a92714246e64bb9f0c78d72933e/docs/zap-ci.md"
+    },
+    {
+      "id": "cs-scanner-2485-issue",
+      "type": "linear",
+      "url": "https://linear.app/kotobalabs/issue/MITHRIL-2485"
     }
   ],
   "decisions": [
@@ -73,6 +83,115 @@
       ],
       "next_action": "Verify integrated main; qualify versioned Fund translation, verified target authority and bounded live executor before service adoption",
       "responsible_owner": "Codex source; independent reviewer UNKNOWN"
+    },
+    {
+      "id": "cs-scanner-standalone-20261113",
+      "title": "Mithril-owned scanner snapshot without Kotoba runtime",
+      "decision_status": "adopted_scoped_ci_integration",
+      "decided_at": "2026-11-13",
+      "decision_owner": "Jun",
+      "scope": "Mithril CS VKE CI and bounded first-party passive HTTP verification",
+      "decision": "Own a provenance-pinned scanner source snapshot; use Babashka, Clojure standard libraries and fixed Python HTTP transport. No Kotoba/KBB/compiler/stdlib runtime or external source resolution in CI.",
+      "deployment_status": "CI_CANDIDATE_VERIFIED_PUBLIC_APPLICATION_ACCESS_BLOCKED",
+      "review_state": "SOURCE_RUNTIME_VERIFIED_APPLICATION_QUALIFICATION_OPEN",
+      "source_refs": [
+        "cs-scanner-2485-adr",
+        "cs-scanner-2485-issue"
+      ],
+      "assumptions": [
+        {
+          "id": "cs-scan-a1",
+          "kind": "invariant",
+          "statement": "CI fetches only Mithril source; original test cases/assertions and count floor remain preserved during host port.",
+          "status": "OBSERVED_AT_617F450",
+          "source_refs": [
+            "cs-scanner-2485-issue"
+          ]
+        },
+        {
+          "id": "cs-scan-a2",
+          "kind": "observed_limit",
+          "statement": "HTTP403 is receipt of an error response, not application scan acceptance or security clearance.",
+          "status": "APPLICATION_COVERAGE_BLOCKED",
+          "source_refs": [
+            "cs-scanner-2485-issue"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "id": "cs-scan-m1",
+          "name": "Standalone scanner test cases",
+          "value": 312,
+          "unit": "tests;1446 assertions",
+          "kind": "synthetic_vke_test",
+          "observed_at": "2026-11-13",
+          "sample_size": 1,
+          "workload": "Exact source617f450, original imported suite; zero failures/errors",
+          "unknown_reason": null,
+          "source_refs": [
+            "cs-scanner-2485-issue"
+          ]
+        },
+        {
+          "id": "cs-scan-m2",
+          "name": "Hardened actual HTTP control candidates",
+          "value": 0,
+          "unit": "candidate findings",
+          "kind": "synthetic_vke_http_test",
+          "observed_at": "2026-11-13",
+          "sample_size": 1,
+          "workload": "All configured security headers; positive missing-header control14 candidates; no exploit validation",
+          "unknown_reason": null,
+          "source_refs": [
+            "cs-scanner-2485-issue"
+          ]
+        },
+        {
+          "id": "cs-scan-m3",
+          "name": "Company application security and normalized production cost",
+          "value": null,
+          "unit": "qualified application runs and USD/run",
+          "kind": "unmeasured",
+          "observed_at": "2026-11-13",
+          "sample_size": null,
+          "workload": "Anonymous public mithril.fund GET received403; no settled billing or app response verification",
+          "unknown_reason": "Access-blocked; error-page candidates cannot qualify application security",
+          "source_refs": [
+            "cs-scanner-2485-issue"
+          ]
+        },
+        {
+          "id": "cs-scan-m4",
+          "name": "Largest child process RSS",
+          "value": 157072,
+          "unit": "KiB",
+          "kind": "observed_runtime",
+          "observed_at": "2026-11-13",
+          "sample_size": 1,
+          "workload": "Linux getrusage CHILDREN maxrss at617f450; not aggregate Pod peak",
+          "unknown_reason": null,
+          "source_refs": [
+            "cs-scanner-2485-issue"
+          ]
+        }
+      ],
+      "review_triggers": [
+        {
+          "id": "cs-scan-t1",
+          "type": "event",
+          "condition": "Changed dependency/source pin, failed authorization/egress/transport fidelity, public active mode or new trust boundary",
+          "response": "Review ADR, replay original cases and exact-source controls before adoption"
+        },
+        {
+          "id": "cs-scan-t2",
+          "type": "event",
+          "condition": "Any access-blocked/error-only collection shown as application security acceptance",
+          "response": "Immediate report/gate review; retain unknown coverage and original response status"
+        }
+      ],
+      "next_action": "Verify actual integrated main. MITHRIL-1836 owns authorized application route/staging acceptance behind403, broader scanner scope and durable evidence custody; no WAF weakening or production security claim.",
+      "responsible_owner": "Codex CI source; existing1836 product/security owner; independent reviewer UNKNOWN"
     }
   ]
 }
