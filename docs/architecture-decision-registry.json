@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "registry_updated_at": "2026-11-13",
+  "coverage": "Independent CS engine decision; owning Fund registry remains an incremental workspace index",
+  "sources": [
+    {
+      "id": "cs-adr-0001",
+      "type": "adr",
+      "url": "https://github.com/mithril-lang/mithril-cs/blob/main/docs/architecture.md"
+    },
+    {
+      "id": "linear-2471",
+      "type": "linear",
+      "url": "https://linear.app/kotobalabs/issue/MITHRIL-2471"
+    },
+    {
+      "id": "strix-reference",
+      "type": "source",
+      "url": "https://github.com/usestrix/strix/tree/928b1ca66ea5a00e7fe83f0fce84c7d557ff8091",
+      "revision": "928b1ca66ea5a00e7fe83f0fce84c7d557ff8091"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "cs-independent-cljc-engine",
+      "title": "Independent CLJC security engine",
+      "decision_status": "accepted_initial_source_architecture",
+      "decided_at": "2026-11-13",
+      "decision_owner": "Jun",
+      "scope": "mithril-lang/mithril-cs initial source only",
+      "decision": "Portable CLJC policy/rules and controlled fixture assessment/repair/retest; explicit CLJ filesystem adapter; retain existing Fund engine and live authority",
+      "deployment_status": "SOURCE_ONLY_NO_SERVICE_CUTOVER",
+      "review_state": "PORTABILITY_VERIFIED_SERVICE_INTEGRATION_OPEN",
+      "source_refs": [
+        "cs-adr-0001",
+        "linear-2471",
+        "strix-reference"
+      ],
+      "assumptions": [
+        {
+          "id": "cs-a1",
+          "kind": "design_assumption",
+          "statement": "Portable policy fits JVM and CLJS without executing target code",
+          "status": "OBSERVED_VKE_JVM_BB_CLJS",
+          "source_refs": [
+            "cs-adr-0001"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "id": "cs-m1",
+          "name": "Qualified portable test executions",
+          "value": 3,
+          "unit": "runs",
+          "kind": "synthetic_vke_test",
+          "observed_at": "2026-11-13",
+          "sample_size": 3,
+          "workload": "One exact source cf9a3b3: JVM15/82, BB15/82, CLJS10/63; all zero failures/errors",
+          "unknown_reason": null,
+          "source_refs": [
+            "linear-2471"
+          ]
+        }
+      ],
+      "review_triggers": [
+        {
+          "id": "cs-t1",
+          "type": "event",
+          "condition": "Changed trust boundary, failed portability or isolation/authority failure",
+          "response": "Revisit ADR and integration contract before active service adoption"
+        }
+      ],
+      "next_action": "Verify integrated main; qualify versioned Fund translation, verified target authority and bounded live executor before service adoption",
+      "responsible_owner": "Codex source; independent reviewer UNKNOWN"
+    }
+  ]
+}
