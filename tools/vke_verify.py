@@ -203,6 +203,16 @@ def main():
         existing = get(obj["kind"], obj["metadata"]["name"], "-n", NS, absent=True)
         if existing is None: create(obj)
         else: need(existing["spec"] == obj["spec"], "existing lane config mismatch")
+    priority_name = "mithril-cs-2471-nonpreemptible"
+    priority = get("priorityclass", priority_name, absent=True)
+    if priority is None:
+        obj = {"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass",
+               "metadata":{"name":priority_name,"labels":{"mithril.fund/owner":"MITHRIL-2471"}},
+               "value":-10,"globalDefault":False,"preemptionPolicy":"Never",
+               "description":"Bounded low-priority CS qualification; never preempts existing work"}
+        priority = kube("create","-f","-","-o","json",body=obj)
+    need(priority.get("value")==-10 and priority.get("globalDefault") is False
+         and priority.get("preemptionPolicy")=="Never", "priority class drift")
     ledger = {"operation":operation,"source":args.source,"phase":"pre-submit","job":name,"image":BB,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
     journal = {"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name+"-journal","namespace":NS},"data":{"state":json.dumps(ledger)}}
     create(journal)
@@ -218,15 +228,30 @@ def main():
     for i,path in enumerate(files):
         script += "mkdir -p " + shlex.quote("/tmp/source/"+path.rsplit("/",1)[0] if "/" in path else "/tmp/source") + "\n"
         script += "cp /input/f"+str(i)+" "+shlex.quote("/tmp/source/"+path)+"\n"
-    script += "cd /tmp/source\nbb --version\nbb test\nbb cs review test/fixtures/demo --authorized\nbb cs pentest-fixture --authorized\n"
-    container = {"name":"contracts","image":BB,"command":["sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
+    script += r"""
+cd /tmp/source
+/init/tini --version
+bb --version
+bb test
+bb cs review test/fixtures/demo --authorized
+bb cs pentest-fixture --authorized
+i=0; while [ "$i" -lt 200 ]; do sh -c 'sleep 0.02 &' ; i=$((i+1)); done
+sleep 2
+bb -e '(let [states (keep (fn [p] (try (second (re-find #"^\d+ \(.*\) ([A-Z])" (slurp (str p "/stat")))) (catch Exception _ nil))) (filter #(.isDirectory %) (.listFiles (java.io.File. "/proc")))) zombies (count (filter #{"Z"} states))] (assert (zero? zombies)) (prn {:tini-reaping :passed :zombies zombies}))'
+if /init/tini -s -- sh -c 'exit 42'; then exit 1; else [ "$?" = 42 ]; fi
+/init/tini -s -g -- sh -c 'trap "exit 0" TERM; sleep 30 & wait' &
+child=$!; sleep 0.2; kill -TERM "$child"; wait "$child"
+echo TINI_FIXTURE_PASS
+"""
+
+    container = {"name":"contracts","image":BB,"command":["/init/tini","-g","--","sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
       "resources":{"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"512Mi"}},
       "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
-      "volumeMounts":[{"name":"source","mountPath":"/input","readOnly":True},{"name":"scratch","mountPath":"/tmp"}]}
-    spec = {"restartPolicy":"Never","preemptionPolicy":"Never","automountServiceAccountToken":False,"enableServiceLinks":False,
+      "volumeMounts":[{"name":"init","mountPath":"/init","readOnly":True},{"name":"source","mountPath":"/input","readOnly":True},{"name":"scratch","mountPath":"/tmp"}]}
+    spec = {"restartPolicy":"Never","priorityClassName":priority_name,"preemptionPolicy":"Never","automountServiceAccountToken":False,"enableServiceLinks":False,
       "nodeSelector":{"kubernetes.io/hostname":args.node},"tolerations":[{"key":"mithril.fund/execution-lane","value":"ci-profile","operator":"Equal","effect":"NoSchedule"}],
       "securityContext":{"runAsNonRoot":True,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000,"seccompProfile":{"type":"RuntimeDefault"}},
-      "containers":[container],"volumes":[{"name":"source","configMap":{"name":cmname}},{"name":"scratch","emptyDir":{"sizeLimit":"512Mi"}}]}
+      "containers":[container],"volumes":[{"name":"init","configMap":{"name":"router-init-tini-c5b0666b4cb6","defaultMode":365}},{"name":"source","configMap":{"name":cmname}},{"name":"scratch","emptyDir":{"sizeLimit":"512Mi"}}]}
     job = {"apiVersion":"batch/v1","kind":"Job","metadata":{"name":name,"namespace":NS,"annotations":{"mithril.fund/source":args.source}},
       "spec":{"backoffLimit":0,"activeDeadlineSeconds":240,"template":{"metadata":{"labels":{"mithril.fund/cs-run":name}},"spec":spec}}}
     actual = create(job)
