@@ -5,7 +5,7 @@ takes over an extant/expired holder. No node/PVC/provider purchase or authority
 handoff. Runtime source, quotas, complete inventory and terminal outcomes are
 read back. Evidence remains in retained Job logs until qualified cloud custody.
 """
-import argparse, base64, datetime, hashlib, io, json, re, shlex, subprocess, tarfile, time, uuid, urllib.parse
+import argparse, base64, datetime, hashlib, io, ipaddress, json, re, shlex, socket, subprocess, tarfile, time, uuid, urllib.parse
 
 REPO = "mithril-lang/mithril-cs"
 NS = "mithril-cs-ci"
@@ -53,10 +53,12 @@ def main():
     p.add_argument("--node", required=True)
     p.add_argument("--node-uid", required=True)
     p.add_argument("--baseline", required=True, help="existing owner-reviewed CI platform policy JSON")
+    p.add_argument("--all-runtimes", action="store_true", help="Run JVM, compiled CLJS/Node and BB with pinned toolchain inputs")
     p.add_argument("--python-contracts", action="store_true", help="Run the bounded router recovery contract suite")
     p.add_argument("--additional-slot", action="store_true", help="Preserve exact legacy unknown reservation (4GiB/2CPU); add bounded CS slot")
     args = p.parse_args()
     image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9" if args.python_contracts else BB
+    if args.all_runtimes: image = "docker.io/library/clojure@sha256:3bf1f971f18c68352e90e33f15435ed18e2f7ed040f1cd6baa1e8aa87b588593"
     need(re.fullmatch("[0-9a-f]{40}", args.source), "source revision required")
     k = ["kubectl", "--kubeconfig", args.kubeconfig, "--request-timeout=12s"]
     def kube(method, *arguments, body=None, absent=False):
@@ -199,11 +201,20 @@ def main():
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
             need(-5 <= age <= 30, "stale metrics")
-        need(s["memory"]["availableBytes"] >= (5.5 if args.additional_slot else 5) * GIB and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
+        need(s["memory"]["availableBytes"] >= (6 if args.all_runtimes else (5.5 if args.additional_slot else 5)) * GIB and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
         need(s["cpu"]["usageNanoCores"] <= (1500000000 if own else 500000000), "CPU hold")
         if lease_uid:
             lease = get("lease", LEASE, "-n", LNS)
             need(lease["metadata"]["uid"] == lease_uid and lease["spec"]["holderIdentity"] == operation, "lease lost")
+            renewed=lease["spec"].get("renewTime") or lease["spec"]["acquireTime"]
+            age=time.time()-datetime.datetime.fromisoformat(renewed.replace("Z","+00:00")).timestamp()
+            need(-5<=age<880,"execution lease stale; reconcile instead of takeover")
+            if age>=20:
+                patch=[{"op":"test","path":"/metadata/uid","value":lease_uid},
+                       {"op":"test","path":"/metadata/resourceVersion","value":lease["metadata"]["resourceVersion"]},
+                       {"op":"test","path":"/spec/holderIdentity","value":operation},
+                       {"op":"add","path":"/spec/renewTime","value":datetime.datetime.now(datetime.timezone.utc).isoformat()}]
+                kube("patch","lease",LEASE,"-n",LNS,"--type=json","--patch-file","/dev/stdin","-o","json",body=patch)
         return {"memory_available": s["memory"]["availableBytes"], "cpu_nanocores": s["cpu"]["usageNanoCores"]}
     initial = fresh()
     need(get("lease", LEASE, "-n", LNS, absent=True) is None, "common slot occupied; no takeover")
@@ -230,6 +241,18 @@ def main():
         priority = kube("create","-f","-","-o","json",body=obj)
     need(priority.get("value")==-10 and priority.get("globalDefault", False) is False
          and priority.get("preemptionPolicy")=="Never", "priority class drift")
+    if args.all_runtimes:
+        addresses=sorted({x[4][0] for x in socket.getaddrinfo("repo.maven.apache.org",443,socket.AF_INET,socket.SOCK_STREAM)})
+        need(addresses and all(ipaddress.ip_address(x).is_global for x in addresses),"public Maven addresses")
+        policy={"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"name":"mcs-maven-egress","namespace":NS},
+                "spec":{"podSelector":{"matchLabels":{"mithril.fund/cs-dependency":"maven"}},
+                        "policyTypes":["Egress"],"egress":[
+                          {"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}],
+                           "ports":[{"protocol":"UDP","port":53},{"protocol":"TCP","port":53}]},
+                          {"to":[{"ipBlock":{"cidr":ip+"/32"}} for ip in addresses],"ports":[{"protocol":"TCP","port":443}]}]}}
+        prior=get("networkpolicy","mcs-maven-egress","-n",NS,absent=True)
+        if prior is None:create(policy)
+        else: need(prior["spec"]==policy["spec"],"Maven policy addresses changed; requalify")
     ledger = {"operation":operation,"source":args.source,"phase":"pre-submit","job":name,"image":image,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
     journal = {"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name+"-journal","namespace":NS},"data":{"state":json.dumps(ledger)}}
     create(journal)
@@ -266,6 +289,20 @@ echo TINI_FIXTURE_PASS
 cd /tmp/source
 python -I -B tools/router_recover.py --selftest
 """
+    if args.all_runtimes:
+        script = script[:script.index("cd /tmp/source")] + r"""
+cd /tmp/source
+export PATH=/tooling:/opt/java/openjdk/bin:/usr/local/bin:/usr/bin:/bin
+export JAVA_TOOL_OPTIONS=-Xmx640m
+clojure -Sdescribe
+clojure -M:test
+clojure -M:cljs-test
+bb test
+bb cs review test/fixtures/demo --authorized
+bb cs pentest-fixture --authorized
+if timeout 3 bash -c 'exec 3<>/dev/tcp/10.96.0.1/443'; then echo PRIVATE_API_EGRESS_DENY_FAILED; exit 1; fi
+echo ALL_RUNTIMES_PASS
+"""
     container = {"name":"contracts","image":image,"command":["/init/tini","-g","--","sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
       "resources":{"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"512Mi"}},
       "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
@@ -274,13 +311,28 @@ python -I -B tools/router_recover.py --selftest
       "nodeSelector":{"kubernetes.io/hostname":args.node},"tolerations":[{"key":"mithril.fund/execution-lane","value":"ci-profile","operator":"Equal","effect":"NoSchedule"}],
       "securityContext":{"runAsNonRoot":True,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000,"seccompProfile":{"type":"RuntimeDefault"}},
       "containers":[container],"volumes":[{"name":"init","configMap":{"name":"router-init-tini-c5b0666b4cb6","defaultMode":365}},{"name":"source","configMap":{"name":cmname}},{"name":"scratch","emptyDir":{"sizeLimit":"512Mi"}}]}
+    if args.all_runtimes:
+        container["resources"]={"requests":{"cpu":"200m","memory":"512Mi","ephemeral-storage":"1Gi"},
+                                "limits":{"cpu":"1","memory":"1Gi","ephemeral-storage":"2Gi"}}
+        container["volumeMounts"].append({"name":"tooling","mountPath":"/tooling"})
+        spec["volumes"].append({"name":"tooling","emptyDir":{"sizeLimit":"256Mi"}})
+        spec["volumes"][-2]["emptyDir"]["sizeLimit"]="1536Mi"
+        spec["initContainers"]=[]
+        for tool,toolimage,path in [
+          ("bb",BB,"/usr/local/bin/bb"),
+          ("node","docker.io/library/node@sha256:47725aca53d3295ec2d3be8f62726599b3033cc262edc2c7e429909b3ac599fc","/usr/local/bin/node")]:
+            spec["initContainers"].append({"name":"install-"+tool,"image":toolimage,
+              "command":["sh","-c","cp "+path+" /tooling/"+tool],
+              "resources":{"requests":{"cpu":"100m","memory":"64Mi","ephemeral-storage":"64Mi"},"limits":{"cpu":"200m","memory":"128Mi","ephemeral-storage":"256Mi"}},
+              "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
+              "volumeMounts":[{"name":"tooling","mountPath":"/tooling"}]})
     job = {"apiVersion":"batch/v1","kind":"Job","metadata":{"name":name,"namespace":NS,"annotations":{"mithril.fund/source":args.source}},
-      "spec":{"backoffLimit":0,"activeDeadlineSeconds":240,"template":{"metadata":{"labels":{"mithril.fund/cs-run":name}},"spec":spec}}}
+      "spec":{"backoffLimit":0,"activeDeadlineSeconds":1200 if args.all_runtimes else 240,"template":{"metadata":{"labels":{"mithril.fund/cs-run":name,**({"mithril.fund/cs-dependency":"maven"} if args.all_runtimes else {})}},"spec":spec}}}
     actual = create(job)
     own = actual["metadata"]["uid"]
     ledger.update(phase="submitted",job_uid=own,source_cm_uid=cm["metadata"]["uid"],lease_uid=lease_uid)
     print(json.dumps(ledger),flush=True)
-    deadline = time.monotonic()+260
+    deadline = time.monotonic()+(1220 if args.all_runtimes else 260)
     while time.monotonic()<deadline:
         fresh()
         j = get("job",name,"-n",NS)
@@ -293,8 +345,8 @@ python -I -B tools/router_recover.py --selftest
             need(any(o.get("uid")==own for o in pod["metadata"].get("ownerReferences",[])), "Pod owner mismatch")
             statuses=pod["status"]["containerStatuses"]
             need(len(statuses)==1 and statuses[0]["imageID"].split("@")[-1]==image.split("@")[-1], "runtime image mismatch")
-            logs=subprocess.run(k+["logs",pod["metadata"]["name"],"-n",NS,"--limit-bytes=65536"],capture_output=True,text=True,timeout=20)
-            need(logs.returncode==0, "logs unavailable; keep lease")
+            logs=subprocess.run(k+["logs",pod["metadata"]["name"],"-n",NS,"--limit-bytes=524288"],capture_output=True,text=True,timeout=20)
+            need(logs.returncode==0 and len(logs.stdout.encode())<524288, "logs unavailable or truncated; keep lease")
             success=any(c.get("type")=="Complete" and c.get("status")=="True" for c in conditions) and all(s.get("restartCount")==0 and s["state"]["terminated"]["exitCode"]==0 for s in statuses)
             ledger.update(phase="terminal",success=success,pod_uid=pod["metadata"]["uid"],log_sha256=hashlib.sha256(logs.stdout.encode()).hexdigest(),
                           image=image,source_tree=commit["tree"]["sha"],source_manifest_sha256=digest(manifest))
@@ -307,7 +359,7 @@ python -I -B tools/router_recover.py --selftest
             kube("delete","--raw","/apis/coordination.k8s.io/v1/namespaces/"+LNS+"/leases/"+LEASE,"-f","-",body={"apiVersion":"v1","kind":"DeleteOptions","preconditions":{"uid":lease_uid,"resourceVersion":current["metadata"]["resourceVersion"]}})
             need(get("lease",LEASE,"-n",LNS,absent=True) is None, "release unknown")
             print(json.dumps(ledger),flush=True)
-            print(logs.stdout,flush=True)
+            print("\n".join(l for l in logs.stdout.splitlines() if l.startswith(("Testing ","Ran ","0 failures","FAIL","ERROR","expected:","  actual:","TINI_","ALL_","OK","test_","PRIVATE_","clojure","ClojureScript"))),flush=True)
             raise SystemExit(0 if success else 1)
         time.sleep(3)
     raise RuntimeError("deadline unknown; retain source/journal/lease for reconciliation")
