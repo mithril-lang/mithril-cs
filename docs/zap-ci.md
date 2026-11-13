@@ -1,0 +1,15 @@
+# Pinned first-party Web Scanner CI integration
+
+Owner: MITHRIL-2485,2026-11-13. This is the Kotoba Labs scanner at cloud-itonami/app-itonami-zap-proxy, not OWASP ZAP. Its old README/catalog names are historical; source receipts name the actual repository and revision.
+
+The VKE recipe `tools/vke_verify.py --zap --additional-slot ...` runs the unmodified scanner source and tests at8bc8a410ad6836c55dedd5cf6ec3edea9e1f0b57, with pinned SCI/KBB engine1675e6aab65d5a99e37840cc5012bc2eca6f4a07 and Kotoba stdlib4bf68e1a1b205674c70f386d59e430801fae3572. Owner-side Git acquisition independently checks every selected Git blob and transport hash. Runtime source is an immutable, chunked cluster ConfigMap input; workers have no repository/API credentials or dependency downloads.
+
+The hermetic KBB adapter selects every original *_test.cljc namespace and runs the host cljs.test counters through the pinned fork engine with the same failure exit behavior. It replaces ambient dependency resolution with an explicit source classpath, without changing original test bodies or assertions. The original coverage-gate.sh enforces311tests/1441assertions and its CWE matrix check. This count gate does not establish measured100% branch coverage or OWASP parity. Both original Python suites also run; any skipped case fails this recipe.
+
+Actual HTTP positive and hardened negative controls run on loopback. Missing/revoked approval is rejected before a scan. A900second operator-recorded grant references Jun's request and the Mithril-owned asset, GET-only passive mode and maximum5pages. Public dogfood is limited to https://mithril.fund/ with no auth, active probes, form submission or redirect following. It is distinct from synthetic tests.
+
+Only current globally routable mithril.fund IPv4 /32 peers on443 plus cluster DNS are permitted. Other egress is denied. A changed peer set requires requalification. Loopback controls are inside the isolated nonroot Pod; no host access, token, PVC or privileged capability. Original global inventory, legacy4GiB/2CPU UNKNOWN reservation, source binding, lease and terminal release checks remain. New slot limit1GiB/1CPU requires6GiB fresh memory and original48GiB disk floor; no paid node or profile/VPN preemption.
+
+The structured ZAP_CI_RESULT separates tests, collection_state, counts, coverage, limitations and needs-review findings. It omits response bodies, evidence strings, cookies and request headers. CI success means the recipe completed, not that a company application is secure. Page-cap/transport failures remain partial; passive findings are unvalidated candidates, not confirmed exploits. No certificate is issued.
+
+Before claiming integration, execute this recipe at exact PR head and actual integrated main, retaining actual source/image/Job/Pod identities and results under2485. Generated reports/logs/build outputs do not enter Git or GitHub artifacts. Cluster retention is temporary custody; approved private R2/catalog archival remains a separate infrastructure gate.
