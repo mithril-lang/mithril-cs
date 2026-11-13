@@ -1,0 +1,656 @@
+;; Rule registry — the machine-readable list of what this stack diagnoses.
+;; IDs follow the ZAP-style numeric convention but are our own definitions.
+;; Mapping column points at the IPA「ウェブ健康診断仕様」 item (see
+;; orgs/cloud-itonami/app-wvme SPEC.tsv) and the OWASP STG category.
+[{:zap-proxy.rule/id "10038"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Security headers missing"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "セキュリティ関連HTTPヘッダの出力"
+  :zap-proxy.rule/owasp "WSTG-CONF-07"
+  :zap-proxy.rule/cwe "CWE-693"}
+  {:zap-proxy.rule/id "10010"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Cookie missing Secure/HttpOnly/SameSite"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "セッション管理のCookie属性"
+  :zap-proxy.rule/owasp "WSTG-SESS-02"
+  :zap-proxy.rule/cwe "CWE-1004"}
+  {:zap-proxy.rule/id "10027"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Sensitive information disclosure"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "Webアプリケーションの情報漏えい"
+  :zap-proxy.rule/owasp "WSTG-INFO-05"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "10037"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "HTTP Authentication Request over plaintext HTTP"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "Webアプリケーションの情報漏えい"
+  :zap-proxy.rule/owasp "WSTG-INFO-05"
+  :zap-proxy.rule/cwe "CWE-319"}
+  {:zap-proxy.rule/id "40018"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "SQL Injection (error-based detection)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "SQLインジェクション No.1-6"
+  :zap-proxy.rule/owasp "WSTG-INPV-05"
+  :zap-proxy.rule/cwe "CWE-89"}
+  {:zap-proxy.rule/id "40021"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "Server-Side Template Injection (error/marker-based detection)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "Server-Side Template Injection"
+  :zap-proxy.rule/owasp "WSTG-INPV-12"
+  :zap-proxy.rule/cwe "CWE-94"}
+  {:zap-proxy.rule/id "40020"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "XML External Entity Injection (error/file-evidence detection)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "XML External Entity Injection"
+  :zap-proxy.rule/owasp "WSTG-INPV-07"
+  :zap-proxy.rule/cwe "CWE-611"}
+  {:zap-proxy.rule/id "40022"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "LDAP Injection (error/detection-based)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "LDAP Injection"
+  :zap-proxy.rule/owasp "WSTG-INPV-13"
+  :zap-proxy.rule/cwe "CWE-90"}
+  {:zap-proxy.rule/id "40023"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "NoSQL Injection (operator-injection detection)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "NoSQL Injection"
+  :zap-proxy.rule/owasp "WSTG-INPV-14"
+  :zap-proxy.rule/cwe "CWE-943"}
+  {:zap-proxy.rule/id "40024"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "Expression Language Injection (arithmetic-probe detection)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "Expression Language Injection"
+  :zap-proxy.rule/owasp "WSTG-INPV-15"
+  :zap-proxy.rule/cwe "CWE-917"}
+  {:zap-proxy.rule/id "40012"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "Reflected XSS"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "クロスサイトスクリプティング No.18-24"
+  :zap-proxy.rule/owasp "WSTG-INPV-01"
+  :zap-proxy.rule/cwe "CWE-79"}
+  {:zap-proxy.rule/id "40014"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "OS Command Injection"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "コマンドインジェクション No.7-17"
+  :zap-proxy.rule/owasp "WSTG-INPV-12"
+  :zap-proxy.rule/cwe "CWE-78"}
+  {:zap-proxy.rule/id "40019"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "Path Traversal"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "パストラバーサル No.29-35"
+  :zap-proxy.rule/owasp "WSTG-INPV-18"
+  :zap-proxy.rule/cwe "CWE-22"}
+  {:zap-proxy.rule/id "40016"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "CRLF Injection"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "CRLFインジェクション No.15-17"
+  :zap-proxy.rule/owasp "WSTG-INPV-16"
+  :zap-proxy.rule/cwe "CWE-113"},
+   {:zap-proxy.rule/id "40025"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "Remote File Inclusion (marker-based detection)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "Remote File Inclusion"
+  :zap-proxy.rule/owasp "WSTG-INPV-06"
+  :zap-proxy.rule/cwe "CWE-918"}
+   {:zap-proxy.rule/id "40026"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "Server-Side Request Forgery (marker-based detection)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "Server-Side Request Forgery"
+  :zap-proxy.rule/owasp "WSTG-INPV-19"
+  :zap-proxy.rule/cwe "CWE-918"}
+   {:zap-proxy.rule/id "40027"
+  :zap-proxy.rule/kind :active
+  :zap-proxy.rule/title "Deserialization (marker/error-based detection)"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "Unsafe Deserialization"
+  :zap-proxy.rule/owasp "WSTG-INPV-12"
+  :zap-proxy.rule/cwe "CWE-502"}
+  {:zap-proxy.rule/id "40028"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "DOM XSS (static sink)"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "DOM XSS (sink)"
+  :zap-proxy.rule/owasp "WSTG-INPV-01"
+  :zap-proxy.rule/cwe "CWE-79"}
+  {:zap-proxy.rule/id "10003"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Outdated JS library"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "JSライブラリのバージョン"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-01"
+  :zap-proxy.rule/cwe "CWE-1104"}
+  {:zap-proxy.rule/id "40029"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "SSTI (reflection)"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "サーバーサイドテンプレートインジェクション"
+  :zap-proxy.rule/owasp "WSTG-INPV-18"
+  :zap-proxy.rule/cwe "CWE-94"}
+  {:zap-proxy.rule/id "40030"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Source map exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "ソースマップ漏洩"
+  :zap-proxy.rule/owasp "WSTG-CRYP-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40031"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Dotenv/config exposure"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa ".env漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-09"
+  :zap-proxy.rule/cwe "CWE-538"}
+  {:zap-proxy.rule/id "40032"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Git repository exposure"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "リポジトリ漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-09"
+  :zap-proxy.rule/cwe "CWE-538"}
+  {:zap-proxy.rule/id "40033"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Backup/archive exposure"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "バックアップ漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-09"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40034"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "phpinfo/debug exposure"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "phpinfo漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-02"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40035"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Stack trace exposure"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "エラーページ情報漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-02"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40036"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Sensitive parameter in URL"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "URLパラメータ漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-07"
+  :zap-proxy.rule/cwe "CWE-359"}
+  {:zap-proxy.rule/id "40037"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Credentials in URL"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "URL内認証情報"
+  :zap-proxy.rule/owasp "WSTG-INFO-07"
+  :zap-proxy.rule/cwe "CWE-359"}
+  {:zap-proxy.rule/id "40038"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Email disclosure"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "メールアドレス漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-08"
+  :zap-proxy.rule/cwe "CWE-359"}
+  {:zap-proxy.rule/id "40039"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Login autocomplete"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "オートコンプリート"
+  :zap-proxy.rule/owasp "WSTG-ATHN-09"
+  :zap-proxy.rule/cwe "CWE-359"}
+  {:zap-proxy.rule/id "40040"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Internal IP disclosure"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "内部IP漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-02"
+  :zap-proxy.rule/cwe "CWE-200"}
+  {:zap-proxy.rule/id "40041"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Internal hostname disclosure"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "内部ホスト名漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-02"
+  :zap-proxy.rule/cwe "CWE-200"}
+  {:zap-proxy.rule/id "40042"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "JWT exposure"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "JWT漏洩"
+  :zap-proxy.rule/owasp "WSTG-ATHN-08"
+  :zap-proxy.rule/cwe "CWE-798"}
+  {:zap-proxy.rule/id "40043"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "API key exposure"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "APIキー漏洩"
+  :zap-proxy.rule/owasp "WSTG-ATHN-08"
+  :zap-proxy.rule/cwe "CWE-798"}
+  {:zap-proxy.rule/id "40044"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Private key exposure"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "秘密鍵漏洩"
+  :zap-proxy.rule/owasp "WSTG-ATHN-08"
+  :zap-proxy.rule/cwe "CWE-798"}
+  {:zap-proxy.rule/id "40045"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Cookie attributes"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "クッキー属性"
+  :zap-proxy.rule/owasp "WSTG-SESSION-12"
+  :zap-proxy.rule/cwe "CWE-1004"}
+  {:zap-proxy.rule/id "40046"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Cookie SameSite"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "SameSite属性"
+  :zap-proxy.rule/owasp "WSTG-SESSION-12"
+  :zap-proxy.rule/cwe "CWE-1004"}
+  {:zap-proxy.rule/id "40047"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Missing SRI"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "SRI欠落"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-829"}
+  {:zap-proxy.rule/id "40048"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Reverse tabnabbing"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "タブナビング"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-1021"}
+  {:zap-proxy.rule/id "40049"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Mixed content"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "混合コンテンツ"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-319"}
+  {:zap-proxy.rule/id "40050"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Insecure WebSocket"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "WebSocket平文"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-319"}
+  {:zap-proxy.rule/id "40051"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Cookie long expiry"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "クッキー長期有効"
+  :zap-proxy.rule/owasp "WSTG-SESSION-12"
+  :zap-proxy.rule/cwe "CWE-1004"}
+  {:zap-proxy.rule/id "40052"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Clickjacking"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "クリックジャッキング"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-07"
+  :zap-proxy.rule/cwe "CWE-1021"}
+  {:zap-proxy.rule/id "40053"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Missing HSTS"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "HSTS欠落"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-319"}
+  {:zap-proxy.rule/id "40054"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Missing nosniff"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "nosniff欠落"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-693"}
+  {:zap-proxy.rule/id "40055"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Missing Referrer-Policy"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "Referrer-Policy欠落"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-693"}
+  {:zap-proxy.rule/id "40056"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Missing Permissions-Policy"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "Permissions-Policy欠落"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-693"}
+  {:zap-proxy.rule/id "40057"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "HTTP redirect"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "HTTPリダイレクト"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-319"}
+  {:zap-proxy.rule/id "40058"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "CSP unsafe-inline"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "CSP unsafe-inline"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-693"}
+  {:zap-proxy.rule/id "40059"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Missing CSP"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "CSP欠落"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-693"}
+  {:zap-proxy.rule/id "40060"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Form HTTP action"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "フォームHTTP送信"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-319"}
+  {:zap-proxy.rule/id "40061"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "DOM open redirect"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "DOMオープンリダイレクト"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-601"}
+  {:zap-proxy.rule/id "40062"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "postMessage wildcard"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "postMessageワイルドカード"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-79"}
+  {:zap-proxy.rule/id "40063"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Viewport zoom disabled"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "ズーム無効化"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-13"
+  :zap-proxy.rule/cwe "CWE-693"}
+  {:zap-proxy.rule/id "40072"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Serialized data hint"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "直列化データ示唆"
+  :zap-proxy.rule/owasp "WSTG-DEC-02"
+  :zap-proxy.rule/cwe "CWE-502"}
+  {:zap-proxy.rule/id "40073"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Meta refresh to HTTP"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "HTTPリフレッシュ"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-07"
+  :zap-proxy.rule/cwe "CWE-319"}
+  {:zap-proxy.rule/id "40074"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Content-Type charset missing"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "charset不足"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-01"
+  :zap-proxy.rule/cwe "CWE-116"}
+  {:zap-proxy.rule/id "40075"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Dangerous CORS methods"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "危険なCORSメソッド"
+  :zap-proxy.rule/owasp "WSTG-CLIENT-07"
+  :zap-proxy.rule/cwe "CWE-16"}
+  {:zap-proxy.rule/id "40076"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Server status exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "サーバーステータス漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40077"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "DB backup exposed"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "DBバックアップ漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40078"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Verbose error disclosure"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "詳細エラー情報"
+  :zap-proxy.rule/owasp "WSTG-ERR-01"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40079"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Changelog exposed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "CHANGELOG漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40080"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Swagger docs exposed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "Swaggerドキュメント漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-200"}
+  {:zap-proxy.rule/id "40081"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Outdated jQuery"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "旧jQuery"
+  :zap-proxy.rule/owasp "WSTG-CSRF-03"
+  :zap-proxy.rule/cwe "CWE-1104"}
+  {:zap-proxy.rule/id "40082"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "AWS key disclosed"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "AWSキー漏洩"
+  :zap-proxy.rule/owasp "WSTG-CONF-10"
+  :zap-proxy.rule/cwe "CWE-798"}
+  {:zap-proxy.rule/id "40083"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Private key disclosed"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa "秘密鍵漏洩"
+  :zap-proxy.rule/owasp "WSTG-CONF-10"
+  :zap-proxy.rule/cwe "CWE-798"}
+  {:zap-proxy.rule/id "40084"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "JWT token exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "JWTトークン漏洩"
+  :zap-proxy.rule/owasp "WSTG-SESSION-12"
+  :zap-proxy.rule/cwe "CWE-200"}
+  {:zap-proxy.rule/id "40085"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title ".env content exposed"
+  :zap-proxy.rule/severity :high
+  :zap-proxy.rule/ipa ".env漏洩"
+  :zap-proxy.rule/owasp "WSTG-CONF-10"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40086"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "GraphQL API exposed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "GraphQL漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-200"}
+  {:zap-proxy.rule/id "40087"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Actuator endpoint exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "Actuator漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-200"}
+  {:zap-proxy.rule/id "40088"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Docker API exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "Docker API漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-200"}
+  {:zap-proxy.rule/id "40089"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title ".svn directory exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa ".svn漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40090"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title ".git/HEAD exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa ".git漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40092"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "SSH banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "SSHバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40093"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "SMTP banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "SMTPバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40094"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "FTP banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "FTPバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40095"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "MySQL banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "MySQLバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40096"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "PostgreSQL banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "PostgreSQLバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40097"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Redis banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "Redisバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40098"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "MongoDB banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "MongoDBバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40099"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Elasticsearch banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "Elasticsearchバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40100"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Memcached banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "memcachedバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40101"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Tomcat banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "Tomcatバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40102"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "nginx banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "nginxバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40103"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Apache banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "Apacheバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40104"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "IIS banner disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "IISバナー漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40105"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "PHP version disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "PHPバージョン漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40106"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "SQLite version disclosed"
+  :zap-proxy.rule/severity :low
+  :zap-proxy.rule/ipa "SQLiteバージョン漏洩"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-209"}
+  {:zap-proxy.rule/id "40108"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Vendor directory exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "vendorディレクトリ露出"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40117"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "Sensitive file exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "センシティブファイル露出"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40118"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "wp-config.php exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "wp-config.php露出"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40119"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "web.config exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "web.config露出"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+  {:zap-proxy.rule/id "40120"
+  :zap-proxy.rule/kind :passive
+  :zap-proxy.rule/title "yarn.lock exposed"
+  :zap-proxy.rule/severity :medium
+  :zap-proxy.rule/ipa "yarn.lock露出"
+  :zap-proxy.rule/owasp "WSTG-INFO-03"
+  :zap-proxy.rule/cwe "CWE-552"}
+]

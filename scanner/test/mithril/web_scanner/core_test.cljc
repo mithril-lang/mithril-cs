@@ -1,0 +1,31 @@
+(ns mithril.web-scanner.core-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [mithril.web-scanner.core :as core]))
+
+(deftest target-origin-test
+  (testing "scheme/host/port decomposition"
+    (is (= {:scheme "http" :host "h.example" :port "80"}
+           (core/target-origin "http://h.example/p?x=1#f")))
+    (is (= {:scheme "https" :host "h.example" :port "443"}
+           (core/target-origin "https://h.example/")))
+    (is (= {:scheme "https" :host "h.example" :port "8443"}
+           (core/target-origin "https://h.example:8443/a")))
+    (is (= {:scheme "https" :host "[::1]" :port "8443"}
+           (core/target-origin "https://[::1]:8443/a")))
+    (is (= {:scheme "https" :host "[2001:db8::1]" :port "443"}
+           (core/target-origin "https://[2001:db8::1]/a")))))
+
+(deftest same-origin-test
+  (is (core/same-origin? "http://a.example/x" "http://a.example/y"))
+  (is (not (core/same-origin? "http://a.example/x" "http://b.example/x")))
+  (is (not (core/same-origin? "http://a.example" "https://a.example")))
+  (is (not (core/same-origin? "http://a.example" "http://a.example:8080"))))
+
+(deftest normalize-url-test
+  (is (= "http://a.example/p" (core/normalize-url "http://a.example/p#frag")))
+  (is (= "http://a.example/p?x=1" (core/normalize-url "http://a.example/p?x=1#z"))))
+
+(deftest finding-test
+  (let [f (core/finding {:rule-id "10038" :severity :low :title "t" :evidence "e" :url "u" :solution "s"})]
+    (is (= "10038" (:rule-id f)))
+    (is (contains? f :solution))))
