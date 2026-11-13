@@ -44,7 +44,7 @@
     (or (not (positive-int? now)) (< now (:last-at run))) :invalid-clock
     (:revoked? context) :revoked
     (not= (select-keys (:grant run) [:id :tenant :project :target :operation :source-revision :source-sha256])
-          (select-keys context [:id :tenant :project :target])) :scope-mismatch
+          (select-keys context [:id :tenant :project :target :operation :source-revision :source-sha256])) :scope-mismatch
     (validate-grant context now) (validate-grant context now)
     (validate-grant (:grant run) now) (validate-grant (:grant run) now)
     (>= (:steps run) (min (get-in run [:grant :max-steps]) (:max-steps context))) :budget-exhausted
