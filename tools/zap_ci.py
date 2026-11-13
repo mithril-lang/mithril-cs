@@ -14,7 +14,7 @@ def launcher(args):
  if args==["-M:test"]:
   nss=[re.search(r"\(ns\s+([^\s()]+)",p.read_text())[1] for p in sorted((SCANNER/"test").rglob("*_test.cljc"))]
   quoted=" ".join("'"+s for s in nss)
-  expr="(require '[cljs.test :as t] "+" ".join("'"+s for s in nss)+") (defmethod t/report [::t/default :end-run-tests] [m] (when-not (t/successful? m) (js/process.exit 1))) (t/run-tests "+quoted+")"
+  expr="(.chdir js/process "+json.dumps(str(SCANNER))+") (require '[cljs.test :as t] "+" ".join("'"+s for s in nss)+") (defmethod t/report [::t/default :end-run-tests] [m] (when-not (t/successful? m) (js/process.exit 1))) (t/run-tests "+quoted+")"
   cmd=base+["-e",expr]
  elif len(args)==3 and args[:2]==["-M","-m"] and args[2] in ["kotoba.zap-proxy.kbb-scan"]:
   cmd=base+["-m",args[2]]
