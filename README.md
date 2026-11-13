@@ -20,7 +20,7 @@ clojure -M:cljs-test
 
 `--authorized` is a local caller acknowledgement that they own or may inspect these files. It is not verified domain, tenant or repository authority. There is no network scanning or target code execution. Output is EDN on stdout; keep reports private and out of Git. Exit 0 = completed configured lexical review, 2 = failed/invalid invocation, 3 = empty/incomplete coverage. Findings remain `needs-review`; a clean report does not establish security. No finding changes exit 0 into a policy block.
 
-Limits: 250 supported files, 256 KiB/file, 4 MiB total, 10,000 entries, depth 32. Limit violations and invalid UTF-8 fail closed; symlinks and unsupported types are listed as excluded. Inspect a quiescent local source folder. Concurrent filesystem mutation is outside this reader's isolation guarantee. No excerpt/source text is included in reports, but paths, hashes and rule metadata can still be sensitive.
+Limits: 250 supported files, 256 KiB/file, 4 MiB total, 10,000 entries, depth 32, 1,000 candidates. Limit violations and invalid UTF-8 fail closed; symlinks and unsupported types are listed as excluded. Inspect a quiescent local source folder. Concurrent filesystem mutation is outside this reader's isolation guarantee. No excerpt/source text is included in reports, but paths, hashes and rule metadata can still be sensitive.
 
 ## Structure
 

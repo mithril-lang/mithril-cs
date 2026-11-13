@@ -6,7 +6,8 @@
            [java.nio.file.attribute FileAttribute]))
 
 (defn temporary [f]
-  (let [root (Files/createTempDirectory "mcs-test-" (make-array FileAttribute 0))]
+  (let [root (.toRealPath (Files/createTempDirectory "mcs-test-" (make-array FileAttribute 0))
+                               (make-array java.nio.file.LinkOption 0))]
     (try (f root)
          (finally
            (with-open [paths (Files/walk root (make-array java.nio.file.FileVisitOption 0))]
@@ -57,3 +58,12 @@
      (Files/write (.resolve root "invalid.py") (byte-array [(unchecked-byte 255)])
                   (make-array java.nio.file.OpenOption 0))
      (is (= 2 (:exit (cli/invoke ["review" (str root) "--authorized"])))))))
+
+(deftest candidate-and-total-budgets
+  (temporary
+   (fn [^Path root]
+     (spit (str (.resolve root "app.js")) "eval(x)\neval(y)")
+     (with-redefs [source/limits (assoc source/limits :candidates 1)]
+       (is (= :candidate-budget-exceeded (get-in (cli/invoke ["review" (str root) "--authorized"]) [:report :code]))))
+     (with-redefs [source/limits (assoc source/limits :total-bytes 5)]
+       (is (= :source-budget-exceeded (get-in (cli/invoke ["review" (str root) "--authorized"]) [:report :code])))))))

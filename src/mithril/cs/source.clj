@@ -7,7 +7,7 @@
            [java.nio.file Files LinkOption Path Paths StandardOpenOption]
            [java.security MessageDigest]))
 
-(def limits {:entries 10000 :files 250 :file-bytes 262144 :total-bytes 4194304 :depth 32})
+(def limits {:entries 10000 :files 250 :file-bytes 262144 :total-bytes 4194304 :depth 32 :candidates 1000})
 (def extensions #{"clj" "cljc" "cljs" "js" "jsx" "ts" "tsx" "py" "java" "go" "rb" "rs"})
 (def nofollow (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
 
@@ -66,6 +66,8 @@
                  (let [bytes (bounded-bytes p (- (:total-bytes limits) (:bytes report)))
                        digest (sha256 bytes)
                        matches (rules/review-text (utf8 bytes))]
+                   (when (> (+ (count (:candidates report)) (count matches)) (:candidates limits))
+                     (fail! :candidate-budget-exceeded))
                    (-> report
                        (update :bytes + (alength bytes))
                        (update :files conj {:path relative :sha256 digest :bytes (alength bytes)})
