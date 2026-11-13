@@ -43,10 +43,11 @@
     (not (contains? #{:ready :running} (:status run))) :terminal-run
     (or (not (positive-int? now)) (< now (:last-at run))) :invalid-clock
     (:revoked? context) :revoked
-    (not= (select-keys (:grant run) [:id :tenant :project :target])
+    (not= (select-keys (:grant run) [:id :tenant :project :target :operation :source-revision :source-sha256])
           (select-keys context [:id :tenant :project :target])) :scope-mismatch
+    (validate-grant context now) (validate-grant context now)
     (validate-grant (:grant run) now) (validate-grant (:grant run) now)
-    (>= (:steps run) (get-in run [:grant :max-steps])) :budget-exhausted
+    (>= (:steps run) (min (get-in run [:grant :max-steps]) (:max-steps context))) :budget-exhausted
     :else nil))
 
 (defn admit-step [run context now]

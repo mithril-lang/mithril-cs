@@ -1,16 +1,17 @@
 (ns mithril.cs.autofix
   "Evidence-bound proposals; application is restricted to the bundled fixture."
   (:require [mithril.cs.fixture :as fixture] [mithril.cs.digest :as digest]
-            [mithril.cs.pentest :as pentest]))
+            [mithril.cs.pentest :as pentest] [mithril.cs.core :as core]))
 
 (defn propose [sandbox validation proposal-id]
-  (when-not (and (= :controlled-fixture (:environment validation))
+  (when-not (and (core/identifier? (:id validation)) (core/identifier? (:run-id validation))
+                (= :controlled-fixture (:environment validation))
                 (= :reproduced (:status validation)) (= "MCS-IDOR-001" (:rule validation))
                 (= (:target sandbox) (:target validation))
                 (= (:revision sandbox) (:source-revision validation))
                 (= (:source-sha256 sandbox) (:source-sha256 validation))
                 (= fixture/vulnerable-source (:source sandbox))
-                (string? proposal-id) (seq proposal-id))
+                (core/identifier? proposal-id))
     (throw (ex-info "No matching reproduced evidence" {:code :proposal-evidence})))
   {:id proposal-id :status :proposed :environment :controlled-fixture
    :target (:target sandbox) :base-revision (:revision sandbox)

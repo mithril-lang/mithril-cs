@@ -28,7 +28,7 @@
       "decided_at": "2026-11-13",
       "decision_owner": "Jun",
       "scope": "mithril-lang/mithril-cs initial source only",
-      "decision": "Portable CLJC policy/rules with explicit CLJ filesystem adapter; retain existing Fund engine and authority",
+      "decision": "Portable CLJC policy/rules and controlled fixture assessment/repair/retest; explicit CLJ filesystem adapter; retain existing Fund engine and live authority",
       "deployment_status": "SOURCE_ONLY_NO_SERVICE_CUTOVER",
       "review_state": "INITIAL_VALIDATION_REQUIRED",
       "source_refs": [
@@ -71,7 +71,7 @@
           "response": "Revisit ADR and integration contract before active service adoption"
         }
       ],
-      "next_action": "Exact-source test execution and versioned Fund translation fixtures; add this incremental decision to owning Fund registry without overwriting other owners' work",
+      "next_action": "Resolve current exact-source VKE capacity/admission and credential input; execute all runtime suites and versioned Fund translation fixtures before integration/service adoption",
       "responsible_owner": "Codex source; independent reviewer UNKNOWN"
     }
   ]

@@ -27,10 +27,24 @@ def complete(obj, kind):
     return obj["items"]
 
 def terminal(pod):
-    statuses = sum((pod.get("status", {}).get(k, []) for k in
-                    ["containerStatuses", "initContainerStatuses", "ephemeralContainerStatuses"]), [])
-    return (pod.get("status", {}).get("phase") in ["Succeeded", "Failed"] and statuses
-            and all("terminated" in s.get("state", {}) for s in statuses))
+    if (pod.get("metadata", {}).get("deletionTimestamp")
+        or pod.get("status", {}).get("phase") not in ["Succeeded", "Failed"]
+        or pod.get("spec", {}).get("ephemeralContainers")
+        or pod.get("status", {}).get("ephemeralContainerStatuses")):
+        return False
+    for declaration, observation in [("containers", "containerStatuses"), ("initContainers", "initContainerStatuses")]:
+        declared = pod.get("spec", {}).get(declaration, [])
+        observed = pod.get("status", {}).get(observation, [])
+        names = [c.get("name") for c in declared]
+        seen = [c.get("name") for c in observed]
+        if declaration == "containers" and not names: return False
+        if len(set(names)) != len(names) or len(set(seen)) != len(seen) or set(names) != set(seen): return False
+        for status in observed:
+            state = status.get("state", {})
+            if (set(state) != {"terminated"} or type(state["terminated"].get("exitCode")) is not int
+                or type(status.get("restartCount")) is not int):
+                return False
+    return True
 
 def main():
     p = argparse.ArgumentParser()
@@ -139,7 +153,7 @@ def main():
             if spec.get("nodeName") and spec["nodeName"] != args.node: continue
             if any(node["metadata"]["labels"].get(x) != v for x, v in spec.get("nodeSelector", {}).items()): continue
             done = any(c.get("type") in ["Complete", "Failed"] and c.get("status") == "True" for c in job.get("status", {}).get("conditions", []))
-            need(done or job["metadata"]["uid"] == own, "concurrent Job hold")
+            need((done and not job["metadata"].get("deletionTimestamp") and not job.get("status", {}).get("active") and not job.get("status", {}).get("terminating")) or job["metadata"]["uid"] == own, "concurrent Job hold")
         s = kube("get", "--raw", "/api/v1/nodes/" + args.node + "/proxy/stats/summary")["node"]
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
