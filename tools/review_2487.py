@@ -50,7 +50,7 @@ def context_and_disposition(url,response,finding):
   resources=[x for x in parser.fetches if re.search(r"(?i)^http://",x)]
   if "css" in ctype:resources+=re.findall(r"(?i)(?:url\(\s*[\"']?|@import\s+[\"'])(http://[^\"'\s)]+)",body)
   if not resources:
-   stripped=re.sub(r"""(?i)\\s+xmlns(?::[A-Za-z0-9_-]+)?\\s*=\\s*["'][^"']*["']""","",body)
+   stripped=re.sub(r"""(?i)\s+xmlns(?::[A-Za-z0-9_-]+)?\s*=\s*["'][^"']*["']""","",body)
    # JavaScript, navigation and unsupported dynamic references remain uncertain.
    if re.search(r"(?i)http://[A-Za-z0-9]",stripped):
     result.update(root_control="mixed-content",reason="HTTP reference retained; execution/navigation context requires browser validation")
