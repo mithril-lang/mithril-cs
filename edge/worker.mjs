@@ -1,7 +1,7 @@
 import engine from "./engine.mjs";
 import {page, css, client, logo, sitemap} from "./ui.mjs";
 import {social} from "./branding.mjs";
-import {reviewPullRequest} from "./github.mjs";
+import {reviewPullRequest,snapshotReader} from "./github.mjs";
 const ORIGIN="https://cs.mithril.fund";
 const UUID=/^[a-f0-9-]{36}$/i;
 const SAFE_HEADERS=["content-type","content-length","strict-transport-security","x-content-type-options","content-security-policy","referrer-policy","x-frame-options"];
@@ -182,11 +182,23 @@ export async function api(req,env,ctx){
   const count=await first(env,"SELECT COUNT(*) AS n FROM cs_reviews WHERE owner=? AND created_at>?",actor.id,Date.now()-86400000);
   if(count.n>=20)fail(429,"daily_run_limit");
   let report;
-  try{report=await reviewPullRequest({repository:body.repository,number:body.number,
+  const input={repository:body.repository,number:body.number,
    allowed:(env.GITHUB_REPOSITORIES||"mithril-lang/mithril-cs").split(","),reviewText:text=>engine.reviewText(text),sha,
    read:async endpoint=>{const r=await fetch(endpoint,{headers:{accept:"application/vnd.github+json","user-agent":"Mithril-CS","x-github-api-version":"2022-11-28"},redirect:"manual",signal:AbortSignal.timeout(8000)});
-    if(!r.ok)throw new Error(r.status===403||r.status===429?"github_rate_limited":"github_unavailable");return data(r);}});
-  }catch(e){fail(409,["repository_not_enabled","github_source_changed","github_source_invalid","github_patch_limit","github_rate_limited","github_unavailable"].includes(e.message)?e.message:"github_unavailable");}
+    if(!r.ok)throw new Error(r.status===403||r.status===429?"github_rate_limited":"github_unavailable");return data(r);}};
+  try{report={...await reviewPullRequest(input),sourceFreshness:'upstream-reread',snapshotObservedAt:null};
+  }catch(e){
+   if(e.message==='github_rate_limited'&&input.allowed.includes(body.repository)&&/^mithril-lang\/[a-zA-Z0-9_.-]+$/.test(body.repository)&&Number.isSafeInteger(body.number)&&body.number>0&&body.number<=1000000){
+    const object=await env.EVIDENCE.get('github-public-snapshots/'+body.repository+'/pull/'+body.number+'.json');
+    if(object){try{if(!Number.isSafeInteger(object.size)||object.size>1048576)throw Error('github_snapshot_unavailable');
+     const catalog=await env.EVIDENCE.get('catalog-index/security/github-public-snapshots/'+body.repository+'/pull/'+body.number+'.json');if(!catalog||!Number.isSafeInteger(catalog.size)||catalog.size>16384)throw Error('github_snapshot_unavailable');
+     const raw=await object.arrayBuffer(),manifest=JSON.parse(new TextDecoder().decode(await catalog.arrayBuffer())),snapshot=JSON.parse(new TextDecoder().decode(raw));
+     if(raw.byteLength!==manifest.bytes||await sha(raw)!==manifest.sha256||manifest.head!==snapshot.head||manifest.access!=='private')throw Error('github_snapshot_unavailable');
+     report={...await reviewPullRequest({...input,read:snapshotReader(snapshot,{repository:body.repository,number:body.number,now:Date.now()})}),sourceFreshness:'owner-public-snapshot-current-head-unverified',snapshotObservedAt:snapshot.observedAt};
+    }catch{fail(409,'github_snapshot_unavailable');}}
+   }
+   if(!report)fail(409,["repository_not_enabled","github_source_changed","github_source_invalid","github_patch_limit","github_rate_limited","github_unavailable"].includes(e.message)?e.message:"github_unavailable");
+  }
   // Recheck the actual session/project after upstream I/O, before persistence.
   const again=await identity(req,env);if(again.id!==actor.id)fail(403,"actor_changed");await projectAccess(req,env,again,project);
   const old=await first(env,"SELECT id FROM cs_reviews WHERE owner=? AND project=? AND repository=? AND pull_number=? AND head_sha=?",actor.id,project,report.repository,report.number,report.head);if(old)return reply(old);

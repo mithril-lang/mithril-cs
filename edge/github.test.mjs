@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {reviewPullRequest} from './github.mjs';
+import {reviewPullRequest,snapshotReader} from './github.mjs';
 import engine from './engine.mjs';
 import {sha} from './worker.mjs';
 const repo='mithril-lang/mithril-cs',head='a'.repeat(40),base='b'.repeat(40);
@@ -9,3 +9,4 @@ test('public PR binds both source reads and reviews added lines using portable r
 test('unauthorized repository never reaches the network',async()=>{const f=fixture();f.input.repository='foreign/repo';await assert.rejects(()=>reviewPullRequest(f.input),/repository_not_enabled/);assert.equal(f.urls.length,0);});
 test('moving PR head fails without reusing stale findings',async()=>{const f=fixture({stale:true});await assert.rejects(()=>reviewPullRequest(f.input),/github_source_changed/);});
 test('missing and omitted patches stay explicit; zero findings never implies complete',async()=>{const r=await reviewPullRequest(fixture({noPatch:true,total:101}).input);assert.equal(r.coverage.reviewedFiles,0);assert.equal(r.coverage.missingFiles,100);assert.equal(r.coverage.patchUnavailable,1);assert.equal(r.coverage.exploitValidation,false);});
+test('snapshot rejects expired, future, private, mismatched and forged source identities',()=>{const s={schemaVersion:1,public:true,repository:repo,number:8,observedAt:10000000,head,base,files:[],pr:{base:{sha:base,repo:{full_name:repo}},head:{sha:head}}};const options={repository:repo,number:8,now:10000000};assert.equal(typeof snapshotReader(s,options),'function');for(const change of [{public:false},{observedAt:0},{observedAt:20000000},{repository:'foreign/repo'},{head:'c'.repeat(40)}])assert.throws(()=>snapshotReader({...s,...change},options),/github_snapshot_unavailable/);});

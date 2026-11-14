@@ -25,7 +25,7 @@ function fixture(){
    if(new URL(req.url).pathname==="/v1/logout"){revoked.add(token);return Response.json({ok:true},{headers:{"set-cookie":"mf_session=; Max-Age=0; Domain=mithril.fund; Path=/; Secure; HttpOnly"}});}
    return Response.json({userId:token===A?"alice":"bob",assurance:"low"});}},
   WORKSPACE:{async fetch(req){const token=req.headers.get("cookie")?.slice(11);return Response.json({userId:token===A?"alice":"bob",documents:[{id:"owned-project",deleted:false}],nextAfter:null});}},
-  EVIDENCE:{async put(k,v){blobs.set(k,v);},async get(k){const v=blobs.get(k);return v===undefined?null:{arrayBuffer:async()=>new TextEncoder().encode(v).buffer};}}};
+  EVIDENCE:{async put(k,v){blobs.set(k,v);},async get(k){const v=blobs.get(k);return v===undefined?null:{size:new TextEncoder().encode(v).length,arrayBuffer:async()=>new TextEncoder().encode(v).buffer};}}};
  const ctx={waitUntil(p){jobs.push(p)}};
  globalThis.fetch=async (url,options={})=>{
   const u=new URL(url);
@@ -36,6 +36,7 @@ function fixture(){
    return Response.json({Status:0,Answer:u.searchParams.get("type")==="A"?[{type:1,data:badDNS?"127.0.0.1":"104.16.1.2"}]:[]});
   }
   if(u.hostname==="api.github.com"){
+   if(responseMode==='github-rate')return Response.json({message:'API rate limit exceeded'},{status:403});
    assert.equal(options.headers.authorization,undefined);assert.equal(options.redirect,'manual');
    if(u.pathname.endsWith('/files'))return Response.json([{filename:'src/app.js',status:'modified',additions:1,deletions:0,patch:'@@ -1 +1 @@\n+eval(input);'}]);
    return Response.json({title:'Fixture PR',changed_files:1,base:{repo:{full_name:'mithril-lang/mithril-cs'},sha:'b'.repeat(40)},head:{sha:'a'.repeat(40)}});
@@ -85,6 +86,20 @@ test('PR review is explicit, scoped, source-bound, deduplicated and private',asy
  assert.equal((await f.request('/api/reviews',undefined,B)).value.reviews.length,0);
  assert.ok([...f.blobs.keys()].some(k=>k.startsWith('catalog-index/security/cs-reviews/')));
  f.revoke(A);assert.equal((await f.request('/api/reviews')).response.status,401);
+});
+test('rate-limited public PR can use only a recent owner snapshot with explicit freshness',async()=>{
+ const f=fixture();await f.request('/api/session');f.mode('github-rate');
+ const repo='mithril-lang/mithril-cs',head='a'.repeat(40),base='b'.repeat(40),snapshot={schemaVersion:1,public:true,repository:repo,number:9,observedAt:Date.now(),head,base,pr:{title:'Public PR',changed_files:1,head:{sha:head},base:{sha:base,repo:{full_name:repo}}},files:[{filename:'a.js',status:'modified',additions:1,deletions:0,patch:'+eval(input);'}]};
+ f.blobs.set('github-public-snapshots/'+repo+'/pull/9.json',JSON.stringify(snapshot));
+ const raw=JSON.stringify(snapshot),indexKey='catalog-index/security/github-public-snapshots/'+repo+'/pull/9.json',index={bytes:new TextEncoder().encode(raw).length,sha256:await sha(raw),head,access:'private'};
+ f.blobs.set(indexKey,JSON.stringify({...index,sha256:'0'.repeat(64)}));
+ assert.equal((await f.request('/api/reviews',{repository:repo,number:9,authorized:true})).response.status,409);
+ assert.equal((await f.request('/api/reviews')).value.reviews.length,0);
+ f.blobs.set(indexKey,JSON.stringify(index));
+ const made=await f.request('/api/reviews',{repository:repo,number:9,authorized:true});assert.equal(made.response.status,201,JSON.stringify(made.value));
+ const r=(await f.request('/api/reviews')).value.reviews[0];assert.equal(r.data.sourceFreshness,'owner-public-snapshot-current-head-unverified');assert.equal(r.data.snapshotObservedAt,snapshot.observedAt);assert.equal(r.data.coverage.status,'partial');
+ snapshot.number=10;snapshot.observedAt-=1800001;f.blobs.set('github-public-snapshots/'+repo+'/pull/10.json',JSON.stringify(snapshot));
+ const stale=await f.request('/api/reviews',{repository:repo,number:10,authorized:true});assert.equal(stale.response.status,409);assert.equal(stale.value.error.code,'github_snapshot_unavailable');
 });
 test("public routes, CSP, unknown routes, URL rejection and no implicit execution",async()=>{
  const f=fixture();for(const path of ["/","/features","/features/auto-fix","/enterprise","/blog","/blog/kubernetes-security-fundamentals","/pricing","/start","/app/targets","/app/runs","/app/findings","/app/fixes"]){
