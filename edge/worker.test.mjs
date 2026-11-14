@@ -143,3 +143,19 @@ test("logout revocation rejects subsequent reads and writes",async()=>{
  assert.equal((await f.request("/api/targets")).response.status,401);
  assert.equal((await f.request("/api/targets",{url:"https://mithril.fund/",label:"x",authorized:true})).response.status,401);
 });
+
+test("expired accepted work reconciles to unknown without transport or clean coverage",async()=>{
+ const f=fixture(),t=await f.ready(),id=crypto.randomUUID();
+ f.db.prepare("INSERT INTO cs_runs(id,owner,project,target_id,target_version,operation,status,created_at,expires_at) VALUES(?,?,?,?,?,?,'queued',?,?)").run(id,"alice","personal",t.id,t.version,crypto.randomUUID(),Date.now()-50000,Date.now()-1000);
+ const r=await f.request("/api/runs/"+id+"/reconcile",{});assert.equal(r.response.status,200);
+ assert.equal((await f.request("/api/runs")).value.runs[0].status,"unknown");assert.equal(f.fetches.length,0);
+});
+test("pausing a target fences a late response and preserves the original receipt",async()=>{
+ const f=fixture(),t=await f.ready();f.mode("held");
+ await f.request("/api/runs",{targetId:t.id,operation:crypto.randomUUID(),authorized:true});
+ for(let i=0;i<100&&!f.held();i++)await new Promise(setImmediate);assert.equal(f.held(),true);
+ await f.request("/api/targets/"+t.id+"/pause",{paused:true});f.release();await f.complete();
+ assert.equal((await f.request("/api/runs")).value.runs[0].status,"cancelled");
+ assert.equal((await f.request("/api/findings")).value.findings.length,0);
+ assert.equal((await f.request("/api/targets")).value.targets[0].version,t.version+1);
+});

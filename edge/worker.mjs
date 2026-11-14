@@ -109,7 +109,9 @@ async function currentGrant(env,req,actor,project,t,run){
  const now=await target(env,actor.id,project,t.id);
  if(now.paused||now.version!==t.version||!now.verified_at||Date.now()-now.verified_at>7*86400000)fail(409,"target_grant_changed");
  const active=await first(env,"SELECT status,expires_at FROM cs_runs WHERE id=? AND owner=? AND project=?",run,actor.id,project);
- if(active?.status!=="running"||active.expires_at<Date.now())fail(409,"run_stopped");
+ if(active?.status!=="running")fail(409,"run_stopped");
+ if(active.expires_at<=Date.now())fail(504,"run_deadline");
+ return active;
 }
 async function execute(req,env,actor,project,t,id){
  const start=Date.now();
@@ -117,8 +119,9 @@ async function execute(req,env,actor,project,t,id){
   const admitted=await stmt(env,"UPDATE cs_runs SET status='running',started_at=? WHERE id=? AND owner=? AND project=? AND status='queued'",start,id,actor.id,project).run();
   if(admitted.meta.changes!==1)return;
   await currentGrant(env,req,actor,project,t,id);await ownership(env,t);const addresses=await publicAddresses(new URL(t.url).hostname);
-  await currentGrant(env,req,actor,project,t,id);
-  const response=await fetch(t.url,{method:"GET",redirect:"manual",headers:{"user-agent":"Mithril-CS/0.2 (+https://cs.mithril.fund; authorized passive review)","accept":"text/html,application/xhtml+xml;q=0.9,*/*;q=0.5"},signal:AbortSignal.timeout(15000),cf:{cacheTtl:0,cacheEverything:false}});
+  const permit=await currentGrant(env,req,actor,project,t,id);
+  const remaining=Math.min(15000,permit.expires_at-Date.now());if(remaining<=0)fail(504,"run_deadline");
+  const response=await fetch(t.url,{method:"GET",redirect:"manual",headers:{"user-agent":"Mithril-CS/0.2 (+https://cs.mithril.fund; authorized passive review)","accept":"text/html,application/xhtml+xml;q=0.9,*/*;q=0.5"},signal:AbortSignal.timeout(remaining),cf:{cacheTtl:0,cacheEverything:false}});
   const observation=await bodyObservation(response);
   if(Date.now()-start>engine.limits["run-deadline-ms"])fail(504,"run_deadline");
   const headers=Object.fromEntries(SAFE_HEADERS.filter(k=>response.headers.has(k)).map(k=>[k,response.headers.get(k)]));
@@ -142,7 +145,7 @@ async function execute(req,env,actor,project,t,id){
    response.status>=200&&response.status<300?"partial":"failed",raw,key,digest,Date.now(),id,actor.id,project));
   const saved=await env.DB.batch(batch);if(saved.at(-1).meta.changes!==1)fail(409,"run_commit_fenced");
  }catch(error){
-  const code=error instanceof Failure?error.code:error?.name==="TimeoutError"?"transport_timeout":"execution_failed";
+  const code=error instanceof Failure?error.code:["TimeoutError","AbortError"].includes(error?.name)?"transport_timeout":"execution_failed";
   await stmt(env,"UPDATE cs_runs SET status=?,error=?,finished_at=? WHERE id=? AND owner=? AND project=? AND status IN ('queued','running')",
    ["actor_changed","target_grant_changed","sign_in_required","run_stopped","project_denied"].includes(code)?"cancelled":"failed",code,Date.now(),id,actor.id,project).run();
  }
@@ -194,7 +197,7 @@ export async function api(req,env,ctx){
   if(old){if((await first(env,"SELECT target_id FROM cs_runs WHERE id=?",old.id)).target_id!==t.id)fail(409,"operation_reused");return reply(old);}
   const count=await first(env,"SELECT COUNT(*) AS n FROM cs_runs WHERE owner=? AND created_at>?",actor.id,Date.now()-86400000);if(count.n>=20)fail(429,"daily_run_limit");
   const id=crypto.randomUUID(),now=Date.now();
-  try{await stmt(env,"INSERT INTO cs_runs(id,owner,project,target_id,target_version,operation,status,created_at,expires_at) VALUES(?,?,?,?,?,?,'queued',?,?)",id,actor.id,project,t.id,t.version,body.operation,now,now+30000).run();}
+  try{await stmt(env,"INSERT INTO cs_runs(id,owner,project,target_id,target_version,operation,status,created_at,expires_at) VALUES(?,?,?,?,?,?,'queued',?,?)",id,actor.id,project,t.id,t.version,body.operation,now,now+engine.limits["run-deadline-ms"]).run();}
   catch{fail(409,"run_already_active");}
   await audit(env,actor.id,project,"run.requested",id);
   ctx.waitUntil(execute(req,env,actor,project,t,id));return reply({id,status:"queued"},202);
