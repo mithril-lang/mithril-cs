@@ -56,3 +56,10 @@ test('unauthenticated sign-in polling retains waiting and popup fallback guidanc
  const poll=f.intervals.at(-1);await poll();assert.equal(status.innerHTML,fallback);assert.equal(f.account.hidden,true);
  f.actor('alice');await poll();assert.equal(f.account.hidden,false);assert.match(f.root.innerHTML,/id="records"/);
 });
+test('an accepted logout clears this view and broadcasts even when navigation supersedes its request',async()=>{
+ const f=fixture();await until(f.ready);f.hold();
+ const signingOut=f.context.document.querySelector('#sign-out').onclick();
+ assert.equal(f.click('/app/coverage?lang=en'),true);f.release();await signingOut;await pause();
+ assert.deepEqual(f.posts,['signed-out']);assert.equal(f.account.hidden,true);
+ assert.match(f.root.innerHTML,/Sign in to Mithril CS/);assert.doesNotMatch(f.root.innerHTML,/id="records"/);
+});

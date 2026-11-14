@@ -42,14 +42,14 @@ if(root){
  };
  const message=e=>errors[e.code]||tr("The operation could not be completed. Please try again. Code: ","操作を完了できませんでした。状態を確認して再試行してください。コード：")+e.code;
  async function call(path,body){
-  const requestEpoch=epoch,write=body!==undefined,r=await fetch("/api/"+path,{method:write?"POST":"GET",credentials:"same-origin",cache:"no-store",headers:write?{"content-type":"application/json","x-csrf-token":session?.csrf||""}:{},body:write?JSON.stringify(body):undefined});
-  if(requestEpoch!==epoch)throw {code:"request_superseded"};
+  const requestEpoch=epoch,requestScope=session?.scope,navigationBound=path!=="logout",write=body!==undefined,r=await fetch("/api/"+path,{method:write?"POST":"GET",credentials:"same-origin",cache:"no-store",headers:write?{"content-type":"application/json","x-csrf-token":session?.csrf||""}:{},body:write?JSON.stringify(body):undefined});
+  if(navigationBound&&requestEpoch!==epoch)throw {code:"request_superseded"};
   let data;try{data=await r.json();}catch{throw {code:"invalid_response"};}
-  if(requestEpoch!==epoch)throw {code:"request_superseded"};
+  if(navigationBound&&requestEpoch!==epoch)throw {code:"request_superseded"};
   if(!r.ok){if(r.status===401&&session){invalidate();}throw {code:data.error?.code||"request_failed"};}
   const scope=r.headers.get("x-mithril-scope");
   if(path==="session"){if(!scope||scope!==data.scope)throw {code:"session_changed"};}
-  else if(session&&scope!==session.scope){invalidate();throw {code:"session_changed"};}
+  else if(path==="logout"?(!requestScope||scope!==requestScope):(session&&scope!==session.scope)){invalidate();throw {code:"session_changed"};}
   return data;
  }
  function error(e){const el=$("#action-error");if(el){el.hidden=false;el.textContent=message(e);el.focus();}}
