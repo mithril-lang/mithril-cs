@@ -91,7 +91,11 @@ test('rate-limited public PR can use only a recent owner snapshot with explicit 
  const f=fixture();await f.request('/api/session');f.mode('github-rate');
  const repo='mithril-lang/mithril-cs',head='a'.repeat(40),base='b'.repeat(40),snapshot={schemaVersion:1,public:true,repository:repo,number:9,observedAt:Date.now(),head,base,pr:{title:'Public PR',changed_files:1,head:{sha:head},base:{sha:base,repo:{full_name:repo}}},files:[{filename:'a.js',status:'modified',additions:1,deletions:0,patch:'+eval(input);'}]};
  f.blobs.set('github-public-snapshots/'+repo+'/pull/9.json',JSON.stringify(snapshot));
- const raw=JSON.stringify(snapshot);f.blobs.set('catalog-index/security/github-public-snapshots/'+repo+'/pull/9.json',JSON.stringify({bytes:new TextEncoder().encode(raw).length,sha256:await sha(raw),head,access:'private'}));
+ const raw=JSON.stringify(snapshot),indexKey='catalog-index/security/github-public-snapshots/'+repo+'/pull/9.json',index={bytes:new TextEncoder().encode(raw).length,sha256:await sha(raw),head,access:'private'};
+ f.blobs.set(indexKey,JSON.stringify({...index,sha256:'0'.repeat(64)}));
+ assert.equal((await f.request('/api/reviews',{repository:repo,number:9,authorized:true})).response.status,409);
+ assert.equal((await f.request('/api/reviews')).value.reviews.length,0);
+ f.blobs.set(indexKey,JSON.stringify(index));
  const made=await f.request('/api/reviews',{repository:repo,number:9,authorized:true});assert.equal(made.response.status,201,JSON.stringify(made.value));
  const r=(await f.request('/api/reviews')).value.reviews[0];assert.equal(r.data.sourceFreshness,'owner-public-snapshot-current-head-unverified');assert.equal(r.data.snapshotObservedAt,snapshot.observedAt);assert.equal(r.data.coverage.status,'partial');
  snapshot.number=10;snapshot.observedAt-=1800001;f.blobs.set('github-public-snapshots/'+repo+'/pull/10.json',JSON.stringify(snapshot));
