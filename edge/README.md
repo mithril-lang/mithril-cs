@@ -58,3 +58,22 @@ must validate this profile; no new paid node, foreign hold removal or cache
 clearing follows from it. Revisit on OOM, stale metrics, memory pressure or
 measured peak above allocation. Product/source results and controller monitoring
 qualification remain distinct.
+
+### Public PR upstream limits and owner cache
+
+Cloudflare's shared unauthenticated GitHub egress returned403 during actual UI
+acceptance. A trusted owner may acquire an explicitly public configured company
+PR using tools/github_public_snapshot.py and the existing gh client, without
+putting credentials in the Worker or analysis jobs. Verify public repository
+identity and base/head around the bounded files acquisition; publish the output
+under the dedicated private R2 github-public-snapshots prefix with a content hash
+and Catalog entry. Keep a content-addressed original and the exact PR pointer.
+
+Only a GitHub rate-limit denial permits this fallback. The Worker validates the
+repository/PR/source identity and rejects snapshots older than30minutes, future,
+private, missing or over1MiB. Results explicitly display snapshot time and
+current-head-unverified status, bind the displayed SHA and stay partial. Cache
+freshness is not a webhook/CI App authority or proof of the current upstream
+head. No cache refresh credential, automatic job or arbitrary import endpoint
+exists in the public Worker. This is an owner-provisioned public snapshot path,
+not general private-repository onboarding.

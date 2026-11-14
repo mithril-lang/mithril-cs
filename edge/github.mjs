@@ -25,3 +25,13 @@ export async function reviewPullRequest({repository,number,allowed,read,reviewTe
  return {repository,number,title:String(pr.title||'').slice(0,300),url:'https://github.com/'+repository+'/pull/'+number,
   head:pr.head.sha,base:pr.base.sha,files,coverage,sourceDigest:await sha(JSON.stringify(files)),githubWrites:false};
 }
+
+// Only the trusted owner publisher can write this fixed-prefix cache. It holds
+// public source snapshots, never a GitHub token or a purported current-head result.
+export function snapshotReader(snapshot,{repository,number,now}) {
+ if(snapshot?.schemaVersion!==1||snapshot.public!==true||snapshot.repository!==repository||snapshot.number!==number||
+    !Number.isSafeInteger(snapshot.observedAt)||now-snapshot.observedAt>1800000||snapshot.observedAt>now+5000||
+    !Array.isArray(snapshot.files)||snapshot.pr?.base?.repo?.full_name!==repository||
+    snapshot.head!==snapshot.pr?.head?.sha||snapshot.base!==snapshot.pr?.base?.sha)throw new Error('github_snapshot_unavailable');
+ return async endpoint=>endpoint.endsWith('/files?per_page=100')?snapshot.files:snapshot.pr;
+}
