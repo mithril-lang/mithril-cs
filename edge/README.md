@@ -26,3 +26,35 @@ Generated reports and compiled artifacts use qualified dedicated private mithril
 ## CI memory accounting review (2206)
 
 Initial admission retains6 GiB free and48 GiB disk. For this edge recipe only, once the exact owned active Pod is observed, available memory plus that Pod's fresh measured working-set bytes must still meet6 GiB. Credit is at most its fixed1 GiB limit, requires the exact owner Pod UID, one metrics row, age<=30 seconds and the unchanged single-container/no-ephemeral boundary. This preserves4 GiB foreign unknown reservation plus1 GiB free margin and the unused portion of the owned1 GiB budget. Before ownership or with foreign/stale/duplicate/over-limit metrics, there is no credit. Existing non-edge recipes are unchanged. Seven pure owner-controller tests and live per-run min/max/sample aggregates qualify this accounting; it is not permission to clear any foreign hold or raise a node limit. Prior failed Job/Pod/journal is retained and its exact owned Lease released only after terminal read-back.
+
+## Feature workspaces (2206, 2026-11-14)
+
+Figma section1030:45068 maps to /app/pentesting, reviews, fixes, coverage,
+infrastructure, reports and risk, with original targets/runs routes retained.
+Only scoped D1 records populate the displays. Coverage shows recorded execution
+dates, not a schedule. Infrastructure reports the actual configured CS service
+bindings, not customer cloud discovery or a security verdict. Exported JSON
+preserves source, run, evidence and partial coverage. No synthetic example data
+is used by production code.
+
+Public PR review is an explicit read of configured company repositories (default
+mithril-lang/mithril-cs). Both base and head are rechecked around the files read;
+only added patch lines are reviewed with the four existing portable lexical
+rules. Missing/omitted patches remain partial. No credentials, installation,
+GitHub write, webhook, private source or automatic CI trigger is introduced.
+cs_reviews is an additive table with owner/project filtering and source dedupe.
+Existing records/authority are not migrated. Full App reporting/PR write and
+customer-cloud/scheduled execution remain owning2204/2468/2469/2470 acceptance.
+
+The explicit --edge-memory-mib768 profile reserves4GiB foreign UNKNOWN plus
+768MiB owned allocation plus1GiB margin, retaining original CPU/storage,
+identity/lease/terminal and complete test/timeouts. Default1024MiB is unchanged.
+Previous37-window qualification observed owned credit max298,512,384bytes;
+that is sampled usage, not a proved peak. The unchanged448MiB JVM heap plus
+320MiB nonheap allowance is the bounded forecast; OOM/failure is a failure,
+never a reason to omit tests. Current initial free6,270,373,888bytes falls below
+6GiB but above the explicit5.75GiB allocation sum. New full-suite observation
+must validate this profile; no new paid node, foreign hold removal or cache
+clearing follows from it. Revisit on OOM, stale metrics, memory pressure or
+measured peak above allocation. Product/source results and controller monitoring
+qualification remain distinct.

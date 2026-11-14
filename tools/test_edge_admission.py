@@ -19,6 +19,13 @@ class MemoryBudget(unittest.TestCase):
  def test_duplicate_uid_rejected(self):
   v=self.sample();v["pods"]*=2
   with self.assertRaises(RuntimeError):owned_memory_credit(v,"owned",1000)
+ def test_smaller_allocation_rejects_larger_credit(self):
+  with self.assertRaises(RuntimeError):owned_memory_credit(self.sample(used=769*1024*1024),"owned",1000,768*1024*1024)
+ def test_smaller_allocation_keeps_foreign_reservation_and_margin(self):
+  allocation=768*1024*1024;required=5*GIB+allocation
+  used=400*1024*1024;free=required-used
+  self.assertEqual(used,owned_memory_credit(self.sample(used=used),"owned",1000,allocation))
+  self.assertEqual(free,4*GIB+GIB+(allocation-used))
  def test_foreign_reservation_and_margin_retained(self):
   used=int(.8*GIB);free=int(5.2*GIB);self.assertGreaterEqual(free+used,6*GIB-1)
   self.assertGreaterEqual(free,4*GIB+GIB)
