@@ -460,7 +460,7 @@
       "git_blob": "dc11989c44ca0b28bdb132ca7e52491eca0b0866",
       "source_sha256": "72da306ac05c2f1917e6bc190236036988a24dea935376cd44d581e73d09bc62",
       "owned_path": "scanner/src/mithril/web_scanner/passive.cljc",
-      "owned_sha256": "764b05e62d430274bcea75ccbec7637e6f70a8da02b0516cb3629acd44c3ece7"
+      "owned_sha256": "b6c2d50df38c40f365e176d3d3876e013ba61b491ceab933a546ff08522928a7"
     },
     {
       "source_path": "src/kotoba/zap_proxy/report.cljc",
@@ -539,5 +539,11 @@
       "owned_path": "scanner/test/mithril/web_scanner/test_support.cljc",
       "owned_sha256": "d9ef883a8eaa25608ee37305bdc062b2be5e398a94edf430c3fe238984b1aaa3"
     }
-  ]
+  ],
+  "mithril_owned_extensions_sha256": {
+    "scanner/plugin/http_fetch.py": "a2a375a8f2511fbccea03d036284bf253f8261dfc50c82683bb4e5c8ef53e8b0",
+    "scanner/src/mithril/web_scanner/inspect.clj": "e8e47488ac0ffe370bcb8196f55819b500483c97e1a3284a4db3575065925aa4",
+    "scanner/test/mithril/web_scanner/review_regression_test.cljc": "a5d3510cc94b81158af64fd672a968be5bb8fff73e51e898f922f985fedd54f3"
+  },
+  "review_issue": "MITHRIL-2487"
 }
