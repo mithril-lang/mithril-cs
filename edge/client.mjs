@@ -19,6 +19,10 @@ if(root){
  const date=x=>x?new Date(x).toLocaleString():tr("Not recorded","記録なし");
  const names={targets:tr("Targets","検査対象"),runs:tr("Run history","実行履歴"),findings:tr("Findings","検出結果"),fixes:"Auto-Fix",pentesting:tr("Autonomous pentesting","自律ペンテスト"),reviews:tr("Pull request review","PRレビュー"),coverage:tr("Continuous coverage","継続監視"),infrastructure:tr("Infrastructure","インフラ"),reports:tr("Security report","セキュリティレポート"),risk:tr("Findings and risk","検出結果とリスク")};
  const errors={
+  github_source_changed:tr("The PR changed during review. Retry to review the current source.","レビュー中にPRが更新されました。最新のソースで再試行してください。"),
+  github_rate_limited:tr("GitHub rate-limited this read. Wait before retrying; no result was saved.","GitHubの取得上限に達しました。時間をおいて再試行してください。結果は保存されていません。"),
+  github_unavailable:tr("The public PR could not be read. Check the repository and PR number.","公開PRを取得できませんでした。リポジトリとPR番号を確認してください。"),
+  repository_not_enabled:tr("Choose a configured public company repository.","接続済みの自社公開リポジトリを選択してください。"),
   sign_in_required:tr("Sign in to continue.","ログインしてください。"),ownership_not_verified:tr("The DNS proof was not found. Check the TXT record and retry after DNS propagation.","DNSの証明が見つかりません。TXTレコードと反映状況を確認して再試行してください。"),
   target_execution_not_enabled:tr("Execution is currently limited to approved company origins. This target remains saved.","現在の実行範囲は承認済みの自社オリジンです。この対象は保存されています。"),
   target_not_ready:tr("Verify control and resume the target before running.","所有確認と対象の再開後に実行してください。"),

@@ -29,5 +29,41 @@
     "width": 1200,
     "height": 630,
     "sourceSvgSha256": "35c9dd2fe5ebe7b663e9adb415292ae610792bf8f36e5140eaf2986e9e7e24c5"
+  },
+  "taskWorkspaces": {
+    "figmaFile": "N42vvZ2M7tgH2IkGXUUOWP",
+    "section": "1030:45068",
+    "date": "2026-11-14",
+    "frames": {
+      "pentesting": [
+        "1030:45071",
+        "1030:45196"
+      ],
+      "reviews": [
+        "1030:45345",
+        "1030:45430"
+      ],
+      "fixes": [
+        "1030:45539",
+        "1030:45648"
+      ],
+      "coverage": [
+        "1030:45781",
+        "1030:45968"
+      ],
+      "infrastructure": [
+        "1030:46179",
+        "1030:46290"
+      ],
+      "reports": [
+        "1030:46425",
+        "1030:46522"
+      ],
+      "risk": [
+        "1030:46643",
+        "1030:46750"
+      ]
+    },
+    "adaptation": "Responsive native HTML/CSS and existing canonical assets. Only scoped runtime records; no synthetic feature data."
   }
 }
