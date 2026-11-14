@@ -46,6 +46,21 @@ def terminal(pod):
                 return False
     return True
 
+def owned_memory_credit(stats, pod_uid, now):
+    """Credit only measured bytes already consumed by this exact active Pod.
+    Initial admission still requires the unchanged6GiB budget. The4GiB foreign
+    reservation and1GiB unused headroom remain reserved throughout execution.
+    """
+    if pod_uid is None: return 0
+    matches=[p for p in stats.get("pods",[]) if p.get("podRef",{}).get("uid")==pod_uid]
+    need(len(matches)==1, "own Pod metrics missing/duplicate; no memory credit")
+    memory=matches[0].get("memory",{})
+    observed=datetime.datetime.fromisoformat(memory.get("time","").replace("Z","+00:00")).timestamp()
+    need(-5<=now-observed<=30, "own Pod metrics stale; no memory credit")
+    used=memory.get("workingSetBytes")
+    need(type(used) is int and 0<=used<=GIB, "own Pod measured bytes exceed fixed1GiB limit")
+    return used
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--kubeconfig", required=True)
@@ -166,6 +181,7 @@ def main():
     cmname = name + "-source"
     own = None
     lease_uid = None
+    measured={"samples":0,"min_free_bytes":2**63,"max_own_working_set_bytes":0,"min_available_plus_own_bytes":2**63,"max_cpu_nanocores":0}
     def fresh():
         current_nodes = complete(get("nodes"), "Node")
         need({n["metadata"]["name"]: n["metadata"]["uid"] for n in current_nodes} == roster, "node roster changed")
@@ -177,6 +193,7 @@ def main():
         js = complete(get("jobs", "-A"), "Job")
         seen = set()
         reserved_seen = False
+        own_metric_uid = None
         for pod in ps:
             spec = pod["spec"]
             if spec.get("nodeName") and spec["nodeName"] != args.node: continue
@@ -191,6 +208,12 @@ def main():
                 need(all(s.get("ready") for s in pod["status"]["containerStatuses"]), "platform readiness")
                 seen.add(uid); continue
             need(own is not None and any(o.get("uid") == own for o in pod["metadata"].get("ownerReferences", [])), "concurrent workload hold")
+            if args.edge_console and spec.get("nodeName")==args.node and pod.get("status",{}).get("phase")=="Running":
+                need(own_metric_uid is None and not spec.get("ephemeralContainers")
+                     and len(spec.get("containers",[]))==1
+                     and spec["containers"][0].get("resources",{}).get("limits",{}).get("memory")=="1Gi",
+                     "own Pod credit boundary changed")
+                own_metric_uid=uid
         need(seen == set(platform), "platform disappeared")
         if args.additional_slot: need(reserved_seen, "legacy reservation missing; requalify instead of clearing hold")
         for job in js:
@@ -204,11 +227,20 @@ def main():
             if any(node["metadata"]["labels"].get(x) != v for x, v in spec.get("nodeSelector", {}).items()): continue
             done = any(c.get("type") in ["Complete", "Failed"] and c.get("status") == "True" for c in job.get("status", {}).get("conditions", []))
             need((done and not job["metadata"].get("deletionTimestamp") and not job.get("status", {}).get("active") and not job.get("status", {}).get("terminating")) or job["metadata"]["uid"] == own, "concurrent Job hold")
-        s = kube("get", "--raw", "/api/v1/nodes/" + args.node + "/proxy/stats/summary")["node"]
+        summary = kube("get", "--raw", "/api/v1/nodes/" + args.node + "/proxy/stats/summary")
+        s = summary["node"]
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
             need(-5 <= age <= 30, "stale metrics")
-        need(s["memory"]["availableBytes"] >= (6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5)) * GIB and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
+        credit=owned_memory_credit(summary,own_metric_uid,time.time()) if args.edge_console and own_metric_uid else 0
+        required=(6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5))*GIB
+        need(s["memory"]["availableBytes"]+credit >= required and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
+        if args.edge_console:
+            measured["samples"]+=1
+            measured["min_free_bytes"]=min(measured["min_free_bytes"],s["memory"]["availableBytes"])
+            measured["max_own_working_set_bytes"]=max(measured["max_own_working_set_bytes"],credit)
+            measured["min_available_plus_own_bytes"]=min(measured["min_available_plus_own_bytes"],s["memory"]["availableBytes"]+credit)
+            measured["max_cpu_nanocores"]=max(measured["max_cpu_nanocores"],s["cpu"]["usageNanoCores"])
         need(s["cpu"]["usageNanoCores"] <= (1500000000 if own else 500000000), "CPU hold")
         if lease_uid:
             lease = get("lease", LEASE, "-n", LNS)
@@ -391,7 +423,7 @@ node -e 'const fs=require("fs"),crypto=require("crypto");const b=fs.readFileSync
             success=any(c.get("type")=="Complete" and c.get("status")=="True" for c in conditions) and all(s.get("restartCount")==0 and s["state"]["terminated"]["exitCode"]==0 for s in statuses)
             ledger.update(phase="terminal",success=success,pod_uid=pod["metadata"]["uid"],log_sha256=hashlib.sha256(logs.stdout.encode()).hexdigest(),
                           zap_result=next((json.loads(line[len("ZAP_CI_RESULT "):]) for line in logs.stdout.splitlines() if line.startswith("ZAP_CI_RESULT ")),None),
-                          image=image,source_tree=commit["tree"]["sha"],source_manifest_sha256=digest(manifest))
+                          image=image,source_tree=commit["tree"]["sha"],source_manifest_sha256=digest(manifest),edge_resource_windows=measured if args.edge_console else None)
             # Bounded logs remain in the retained Pod. Only metadata enters journal.
             old=get("ConfigMap",name+"-journal","-n",NS)
             old["data"]["state"]=json.dumps(ledger)

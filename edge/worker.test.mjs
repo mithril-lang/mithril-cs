@@ -4,6 +4,9 @@ import {DatabaseSync} from "node:sqlite";
 import {readFileSync} from "node:fs";
 import worker,{normalizeTarget,sha} from "./worker.mjs";
 import engine from "./engine.mjs";
+import vm from "node:vm";
+import {client} from "./ui.mjs";
+new vm.Script(client,{filename:"browser-client.js"});
 const ORIGIN="https://cs.mithril.fund",A="a".repeat(32),B="b".repeat(32);
 const schema=readFileSync(new URL("./schema.sql",import.meta.url),"utf8");
 function fixture(){
@@ -63,7 +66,7 @@ test("actual compiled portable rules keep partial coverage and framing alternati
  assert.equal(engine.transition("cancelled","partial"),false);assert.equal(engine.transition("approved","exported"),true);
 });
 test("public routes, CSP, unknown routes, URL rejection and no implicit execution",async()=>{
- const f=fixture();for(const path of ["/","/features","/features/auto-fix","/enterprise","/blog","/pricing","/start","/app/targets","/app/runs","/app/findings","/app/fixes"]){
+ const f=fixture();for(const path of ["/","/features","/features/auto-fix","/enterprise","/blog","/blog/kubernetes-security-fundamentals","/pricing","/start","/app/targets","/app/runs","/app/findings","/app/fixes"]){
   const r=await f.request(path);assert.equal(r.response.status,200,path);assert.match(r.response.headers.get("content-security-policy"),/script-src 'self'/);
  }
  assert.equal((await f.request("/features/not-a-feature")).response.status,404);
@@ -104,6 +107,7 @@ test("real adapter lifecycle persists receipts, proposals, reviewed export and i
  assert.equal((await f.request("/api/fixes/"+fix.id+"/approve",{note:"Reviewed the scope and compatibility",reviewed:true})).response.status,200);
  const exported=await f.request("/api/fixes/"+fix.id+"/export",{});assert.equal(exported.response.status,200);
  assert.equal(exported.value.applied,false);assert.equal(JSON.parse(exported.value.patch).evidenceSha256,history[0].evidence_sha256);
+ await f.request("/api/session",undefined,B);
  assert.equal((await f.request("/api/fixes/"+fix.id+"/export",{},B)).response.status,404);
  f.mode("hardened");await f.request("/api/runs",{targetId:t.id,operation:crypto.randomUUID(),authorized:true});await f.complete();
  const second=(await f.request("/api/runs")).value.runs[0];assert.equal(second.status,"partial");assert.equal(second.report.findings.length,0);

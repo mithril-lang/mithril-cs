@@ -5,7 +5,10 @@
     "src/content/cs-features.json": "4a30f1a436516e13404aa60095e1d8e1f1a45b29ba6cdc93b5b0f1a07be6fd45",
     "src/routes/cs-features.css": "f0aabf65f681674c2729679d360966138041e8b6dbacdf9b1cfc582afdcc1c76",
     "public/assets/mithril-mark.svg": "fe5fa17d9a2731dcba8a7f16299554717cb4048fddcf137c93f9dc7ab4e8943f",
-    "src/i18n/locales.ts": "af62e711ee0a692f59f00605a1643f69b9065419230b2e6925c70f06d277133d"
+    "src/i18n/locales.ts": "af62e711ee0a692f59f00605a1643f69b9065419230b2e6925c70f06d277133d",
+    "src/content/blog/kubernetes-security.ts": "6900261a661c8d9fc63f46e4040e7e004cf5775797f407bed5c0daceca740d61",
+    "src/content/blog/cloud-container-security.ts": "ab4598b0ca21d2ebb91191a71f42047ead04bb84fbe659680a5ef2326fc37611",
+    "src/content/blog/vulnerability-terms.ts": "26aaec7e23b5d9702ed0320b305592a5250eb6bfac8478a2503a5cdbb19b947f"
   },
   "ownership": "Mithril-owned public design/content snapshot; no live source resolution",
   "note": "Verify against pinned Git objects before publishing; working-tree bytes must equal the recorded revision."

@@ -217,3 +217,109 @@ export const features = [
 ];
 export const locales = ["en","zh-Hans","hi","es","ar","fr","bn","pt","id","ur","ru","de","ja","ko","pcm","arz","mr","jv","su","he","it","ar-MA","pl","fi","zh-TW","vi","tl","ms","ro","hu","bg","el","cs","nl","th","uk"];
 export const names = {"en":"English","zh-Hans":"简体中文","hi":"हिन्दी","es":"Español","ar":"العربية","fr":"Français","bn":"বাংলা","pt":"Português","id":"Bahasa Indonesia","ur":"اردو","ru":"Русский","de":"Deutsch","ja":"日本語","ko":"한국어","pcm":"Naijá","arz":"مصري","mr":"मराठी","jv":"Basa Jawa","su":"Basa Sunda","he":"עברית","it":"Italiano","ar-MA":"الدارجة","pl":"Polski","fi":"Suomi","zh-TW":"繁體中文（台灣）","vi":"Tiếng Việt","tl":"Tagalog","ms":"Bahasa Melayu","ro":"Română","hu":"Magyar","bg":"Български","el":"Ελληνικά","cs":"Čeština","nl":"Nederlands","th":"ไทย","uk":"Українська"};
+export const articles=[
+  {
+    "slug": "kubernetes-security-fundamentals",
+    "date": "2026-10-31",
+    "tags": [
+      "cloud-security",
+      "container-security"
+    ],
+    "titleEn": "Kubernetes security: clusters, workloads and shared responsibility",
+    "titleJa": "",
+    "summaryEn": "Learn what Kubernetes does, how its cluster components fit together, and where to review common security boundaries.",
+    "summaryJa": "",
+    "metaTitleEn": "Kubernetes Security Fundamentals",
+    "tldrEn": [
+      "Kubernetes orchestrates containerized workloads; a cluster has a control plane and worker nodes.",
+      "Pods group one or more containers, while a Deployment describes a desired state for a set of Pods.",
+      "Protect API access, workloads, secrets and networking in layers; the actual controls depend on the cluster and its provider."
+    ],
+    "bodyEn": [
+      "## What is Kubernetes?\n\n**Kubernetes** is an open-source platform for managing containerized workloads and services using declarative configuration and automation. It can help schedule and maintain workloads across a cluster, but it does not make an application secure by itself. An image packages an application and its dependencies; a container is a running instance. A Pod groups one or more containers that share certain resources. Kubernetes and a container runtime have different roles. See the [Kubernetes concepts overview](https://kubernetes.io/docs/concepts/) and its [Pods documentation](https://kubernetes.io/docs/concepts/workloads/pods/).",
+      "## Control plane and worker nodes\n\nA cluster includes a control plane, which manages cluster state and exposes the Kubernetes API, and worker nodes, which run workloads. A Deployment declares a desired state for a set of Pods, such as how many replicas to maintain. An operator or automation sends changes through the API; the cluster works toward the declared state. A managed provider may operate some components, but the exact division of duties depends on the service and contract. Review the [cluster architecture](https://kubernetes.io/docs/concepts/architecture/) and [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) for the version you operate.",
+      "## Where security controls apply\n\nStart by identifying who and what can reach the API and what each identity may do. Review authentication and role-based access control, protect credentials and restrict unnecessary privileges. Kubernetes Secrets are an API for confidential configuration; check the cluster's encryption-at-rest configuration and access policies rather than assuming every Secret is encrypted in the backing store by default. Apply appropriate Pod security standards, keep images and nodes maintained, and restrict traffic using network policies where the cluster's network implementation supports enforcement. Admission controls and audit logs can add preventative and detective checks. These controls address different boundaries and must be configured and verified for the environment. The [Kubernetes security overview](https://kubernetes.io/docs/concepts/security/) and [Secrets guidance](https://kubernetes.io/docs/concepts/configuration/secret/) describe these mechanisms and limits.",
+      "## A bounded review example\n\nFor a team deploying a web service, list the workloads and their service accounts, inspect API and namespace permissions, and check whether externally reachable services match the intended design. Review image provenance, allowed container privileges and policy enforcement with the cluster owner. Record which environment and configuration were actually checked; a single manifest, policy or scan result is not proof that every running workload is protected. See also [cloud workloads and container security](/cloud-workloads-container-security-misconfiguration?lang=en) and [IAM, access control and secrets management](/iam-access-control-secrets-management?lang=en)."
+    ],
+    "bodyJa": [],
+    "i18n": {},
+    "englishOnly": true
+  },
+  {
+    "slug": "cloud-workloads-container-security-misconfiguration",
+    "date": "2026-10-30",
+    "tags": [
+      "cloud-security",
+      "container-security",
+      "misconfiguration"
+    ],
+    "titleEn": "Cloud workloads, containers and misconfiguration explained",
+    "titleJa": "",
+    "summaryEn": "Understand cloud workloads, application containers and configuration drift, and learn where security responsibilities and isolation boundaries matter.",
+    "summaryJa": "",
+    "metaTitleEn": "Cloud Workloads, Container Security and Misconfiguration",
+    "tldrEn": [
+      "A cloud workload is an application or computing task and the resources it uses in a cloud environment.",
+      "A container image is a package used to create a running container; containers often share a host kernel and are not the same isolation boundary as virtual machines.",
+      "A misconfiguration is an unsafe or unintended setting; its impact depends on exposure and context, while configuration drift is change away from an intended baseline."
+    ],
+    "bodyEn": [
+      "Cloud services make it possible to provision applications and infrastructure quickly. Security still depends on knowing what is deployed, who can change it and which protections are configured for the workload. The following concepts describe different parts of that work.",
+      "## What is a cloud workload?",
+      "A cloud workload is an application, service or computing task running in a cloud environment, together with the resources and dependencies needed to run it. Examples include a web application on virtual machines, an event-driven function or a service in containers. Cloud security covers the people, processes and technical controls used to protect cloud data, identities, infrastructure and workloads. The controls needed vary with the service and the data involved.",
+      "Cloud providers and customers have different responsibilities. The provider may operate underlying infrastructure, while the customer may control identities, data, application settings and network exposure; the actual division depends on the service and its contract. Verify the provider documentation rather than assuming a single universal split. The [CISA Cloud Security Technical Reference Architecture](https://www.cisa.gov/sites/default/files/publications/CISA%20Cloud%20Security%20Technical%20Reference%20Architecture_Version%201.pdf) discusses cloud architecture and configuration management.",
+      "## Images, containers and container security",
+      "A container image is a package containing application files and dependencies. A container is a running instance created from an image under a container runtime. Container security addresses risks across image creation and distribution, runtime configuration, the host and the application itself. [NIST SP 800-190](https://www.nist.gov/publications/application-container-security-guide) describes container technologies, security concerns and practical safeguards.",
+      "Many containers on a host share its operating-system kernel. Isolation mechanisms restrict what each container can see and do, but a container is not automatically equivalent to a separate virtual machine or a complete security boundary. The actual isolation depends on the runtime, host configuration and workload. Avoid unnecessary privileges, restrict accessible resources, maintain trusted images and host software, and investigate vulnerabilities in context rather than assuming an image scan alone establishes safety.",
+      "## What are misconfiguration and configuration drift?",
+      "A security misconfiguration is a setting or combination of settings that creates an unintended exposure or weakens a required control. For example, a storage location intended for a small team might be made accessible to everyone by an overly broad access policy. The risk depends on the exposed data, reachability and other controls; a finding does not by itself prove compromise or exploitation.",
+      "Configuration drift is a difference between an observed configuration and an intended baseline that arises over time. A deliberate, approved change can also create a difference until the baseline is updated. Monitor meaningful changes, compare them with an approved desired state, investigate exceptions and test corrections. A policy check is evidence about a setting at a point in time; it is not proof that all identities, application code and data flows are safe.",
+      "## CSPM and CNAPP: posture and application protection",
+      "Cloud security posture management (CSPM) is the continuing work of assessing cloud environments, identifying security risks and supporting their remediation. CSPM capabilities can monitor resources against policies and alert on vulnerabilities or configurations that may create exposure. A finding is a starting point for investigation, not proof of compromise. The [CISA cloud security reference architecture](https://www.cisa.gov/sites/default/files/2023-05/Cloud%20Security%20Technical%20Reference%20Architecture%20v2.pdf) describes CSPM as a continuous process, rather than a one-time scan.",
+      "A cloud-native application protection platform (CNAPP) brings together capabilities intended to improve visibility and protection for cloud applications. A CNAPP can include CSPM along with workload or development security capabilities, but products differ in scope and coverage. CSPM and CNAPP are related terms, not synonyms: posture management focuses on assessing and improving the environment, while CNAPP describes a broader platform approach. See the glossary in the [CISA Trusted Internet Connections cloud use case](https://www.cisa.gov/sites/default/files/2023-05/tic_3.0_cloud_use_case_508c.pdf).",
+      "For example, a posture check might flag a storage policy that permits public access. An authorized owner should assess the data, reachability and intended policy before changing access; some public resources are intentional. An alert does not prove sensitive data was exposed, and automated remediation needs explicit authorization and safeguards. Neither category guarantees complete detection or replaces ownership, identity controls and recovery testing. Sources for this section reviewed on 2026-11-01.",
+      "## A practical starting point",
+      "Inventory workloads, owners, accounts and sensitive data; identify exposed entry points and dependencies. Review identity permissions, storage access, network paths and image provenance against the provider's documented controls. Patch supported components, record exceptions and test recovery. Prioritize changes by actual exposure and impact, keep audit logs, and reassess after deployments or ownership changes. See also [firewalls, IDS, IPS and zero trust](https://blog.mithril.fund/firewalls-ids-ips-zero-trust?lang=en) and [software supply chains and SBOMs](https://blog.mithril.fund/software-supply-chain-sbom-dependencies-code-signing?lang=en). Sources reviewed on 2026-10-30."
+    ],
+    "bodyJa": [],
+    "i18n": {},
+    "englishOnly": true
+  },
+  {
+    "slug": "cve-cvss-cwe-explained",
+    "date": "2026-10-29",
+    "tags": [
+      "cve",
+      "cvss",
+      "cwe",
+      "vulnerability-management"
+    ],
+    "titleEn": "CVE, CVSS and CWE: what the security identifiers mean",
+    "titleJa": "",
+    "summaryEn": "Understand vulnerability identifiers, severity scoring and weakness categories, and how to use them together without confusing severity with risk.",
+    "summaryJa": "",
+    "metaTitleEn": "CVE vs CVSS vs CWE: Vulnerabilities, Severity and Weaknesses",
+    "tldrEn": [
+      "CVE identifies a publicly known vulnerability; the identifier itself is not a severity score.",
+      "CVSS provides a standardized way to describe vulnerability severity. A base score alone is not an assessment of risk in a particular environment.",
+      "CWE categorizes common weaknesses that can contribute to vulnerabilities; it does not identify one specific affected product or incident."
+    ],
+    "bodyEn": [
+      "Security advisories often contain a CVE identifier, a CVSS score and a CWE identifier. These labels answer different questions: which publicly known vulnerability is being discussed, how its technical severity is described, and what kind of underlying weakness may be involved. They complement each other and are not interchangeable.",
+      "## CVE: identify a vulnerability",
+      "Common Vulnerabilities and Exposures (CVE) provides common identifiers for publicly known cybersecurity vulnerabilities. A CVE identifier helps people connect advisories and other records about the same vulnerability. The identifier is not a patch, a proof of exploitation or a severity score. Its record and references can change as more information becomes available. See the [NIST CVE glossary entry](https://csrc.nist.gov/glossary/term/common_vulnerabilities_and_exposures).",
+      "A vulnerability is a weakness that can be exploited to compromise a system's security. A record may name affected products or versions, but the identifier alone does not establish whether a particular installation is vulnerable. Check the current vendor advisory, actual deployed version and configuration before deciding what applies.",
+      "## CVSS: describe severity, not complete risk",
+      "The Common Vulnerability Scoring System (CVSS) describes technical characteristics of a vulnerability and produces a numerical severity score. A vector records the selected metric values and the version used. CVSS scores do not prove active exploitation, and a high base score alone does not measure risk to a particular organization.",
+      "CVSS v4.0 includes Base, Threat, Environmental and Supplemental metric groups. The Base metrics describe intrinsic characteristics; Threat and Environmental metrics can add information about exploit maturity and the particular environment. Supplemental metrics provide context without changing the resulting score. Use the reported version, vector and metric groups when comparing assessments; v3.1 and v4.0 are not interchangeable scales. [FIRST's CVSS v4.0 specification](https://www.first.org/cvss/v4.0/specification-document) explains these distinctions.",
+      "## CWE: classify a weakness",
+      "Common Weakness Enumeration (CWE) is a community-developed list of software and hardware weaknesses. A weakness is a condition that can contribute to vulnerabilities under certain circumstances. A CWE category describes the type of weakness; it is not itself a CVE record for a specific product. Vulnerability records may include a CWE mapping, but a missing or broad mapping does not prove that no weakness exists. See [MITRE's explanation of CWE](https://cwe.mitre.org/about/index.html).",
+      "## A practical triage example",
+      "In an illustrative case, a vendor advisory identifies a vulnerability with a CVE ID, supplies affected versions and a fix, and includes a CVSS assessment. A linked weakness category may explain a relevant failure pattern. A response team checks whether the affected component is deployed, whether it is reachable, whether a fix or mitigation applies, and whether trusted sources report exploitation. The team records uncertainties rather than treating a numerical score as proof of its own exposure.",
+      "Vulnerability management is the ongoing process of identifying, assessing, prioritizing and addressing vulnerabilities and tracking the result. Use the vendor advisory and relevant threat information alongside asset inventory, exposure and operational impact. For related response planning, see [Mithril's incident response guide](https://blog.mithril.fund/cyber-incident-response-by-country?lang=en). Sources reviewed on 2026-10-29. This guide does not establish the status or risk of any particular system."
+    ],
+    "bodyJa": [],
+    "i18n": {},
+    "englishOnly": true
+  }
+];
