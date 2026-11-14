@@ -1,4 +1,5 @@
-export const client=String.raw`
+import {workspaceClient} from "./workspaces.mjs";
+export const client=workspaceClient+String.raw`
 const ja=document.documentElement.lang==="ja",tr=(en,jp)=>ja?jp:en;
 const $=(s,r=document)=>r.querySelector(s),esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const site=$(".cs-site"),theme=$("#theme");
@@ -10,13 +11,18 @@ theme.addEventListener("click",()=>{selected=site.dataset.theme==="dark"?"light"
 $("#locale").addEventListener("change",event=>{const u=new URL(location.href);u.searchParams.set("lang",event.target.value);location.assign(u.href);});
 const root=$("#workspace");
 if(root){
- let session=null,state=null,epoch=0,busy=false,timer=null;
- const tab=location.pathname.split("/")[2]||"targets";
+ let session=null,state=null,epoch=0,busy=false,timer=null,selection={};
+ const tab=location.pathname.split("/")[2]||"pentesting";
+ selection.run=new URL(location.href).searchParams.get("run");
  const statusNames={"queued":tr("Queued","待機中"),"running":tr("Running","実行中"),"partial":tr("Partial coverage","部分検査"),"failed":tr("Failed","失敗"),"cancelled":tr("Cancelled","中止"),"unknown":tr("Outcome unknown","結果不明"),"proposed":tr("Proposed","提案中"),"approved":tr("Approved · not applied","承認済み・未適用"),"rejected":tr("Rejected","却下"),"exported":tr("Exported · application unverified","出力済み・適用未確認"),"needs-review":tr("Needs review","要確認"),"acknowledged":tr("Acknowledged","確認済み"),"dismissed":tr("Dismissed","対象外")};
  const badge=x=>'<span class="status">'+esc(statusNames[x]||x)+"</span>";
  const date=x=>x?new Date(x).toLocaleString():tr("Not recorded","記録なし");
- const names={targets:tr("Targets","検査対象"),runs:tr("Run history","実行履歴"),findings:tr("Findings","検出結果"),fixes:"Auto-Fix"};
+ const names={targets:tr("Targets","検査対象"),runs:tr("Run history","実行履歴"),findings:tr("Findings","検出結果"),fixes:"Auto-Fix",pentesting:tr("Autonomous pentesting","自律ペンテスト"),reviews:tr("Pull request review","PRレビュー"),coverage:tr("Continuous coverage","継続監視"),infrastructure:tr("Infrastructure","インフラ"),reports:tr("Security report","セキュリティレポート"),risk:tr("Findings and risk","検出結果とリスク")};
  const errors={
+  github_source_changed:tr("The PR changed during review. Retry to review the current source.","レビュー中にPRが更新されました。最新のソースで再試行してください。"),
+  github_rate_limited:tr("GitHub rate-limited this read. Wait before retrying; no result was saved.","GitHubの取得上限に達しました。時間をおいて再試行してください。結果は保存されていません。"),
+  github_unavailable:tr("The public PR could not be read. Check the repository and PR number.","公開PRを取得できませんでした。リポジトリとPR番号を確認してください。"),
+  repository_not_enabled:tr("Choose a configured public company repository.","接続済みの自社公開リポジトリを選択してください。"),
   sign_in_required:tr("Sign in to continue.","ログインしてください。"),ownership_not_verified:tr("The DNS proof was not found. Check the TXT record and retry after DNS propagation.","DNSの証明が見つかりません。TXTレコードと反映状況を確認して再試行してください。"),
   target_execution_not_enabled:tr("Execution is currently limited to approved company origins. This target remains saved.","現在の実行範囲は承認済みの自社オリジンです。この対象は保存されています。"),
   target_not_ready:tr("Verify control and resume the target before running.","所有確認と対象の再開後に実行してください。"),
@@ -55,8 +61,8 @@ if(root){
   if(busy)return;busy=true;const version=++epoch;
   try{
    const s=await call("session");if(version!==epoch)return;session=s;
-   const values=await Promise.all(["targets","runs","findings","fixes"].map(x=>call(x)));
-   if(version!==epoch)return;state={targets:values[0].targets,runs:values[1].runs,findings:values[2].findings,fixes:values[3].fixes};
+   const values=await Promise.all(["targets","runs","findings","fixes","reviews","infrastructure"].map(x=>call(x)));
+   if(version!==epoch)return;state={targets:values[0].targets,runs:values[1].runs,findings:values[2].findings,fixes:values[3].fixes,reviews:values[4].reviews,infrastructure:values[5]};
    render();
   }catch(e){if(version!==epoch)return;if(e.code==="sign_in_required")login();else{root.removeAttribute("aria-busy");root.innerHTML='<h1>'+esc(names[tab]||names.targets)+'</h1><p class="error" role="alert">'+esc(message(e))+'</p><button id="retry-load">'+tr("Retry","再試行")+"</button>";$("#retry-load").onclick=load;}}
   finally{busy=false;}
@@ -68,9 +74,10 @@ if(root){
    tab==="runs"?tr("Source-bound receipts, received responses and incomplete coverage. Latest 100 runs.","ソースに紐づく記録、取得応答、未検査範囲。最新100実行を表示します。"):
    tab==="findings"?tr("Review candidates in context. Acknowledgement does not confirm an exploitable vulnerability. Latest 200 observations.","文脈と根拠を確認してください。確認済みの操作は、悪用可能性の証明ではありません。最新200観測を表示します。"):
    tr("Generate, review and export evidence-bound header configurations, then retest. Export does not deploy a change.","根拠に紐づくヘッダー設定を生成・確認・出力し、再検査します。出力では本番設定は変更されません。");
-  root.innerHTML='<div class="row"><div><h1>'+esc(names[tab]||names.targets)+'</h1><p class="muted">'+intro+'</p></div><div class="actions"><button id="refresh">'+tr("Refresh","更新")+'</button><button id="sign-out">'+tr("Sign out","ログアウト")+'</button></div></div><p class="muted">'+tr("Personal workspace · single-URL passive review","個人ワークスペース・単一URLの受動的検査")+'</p><p id="action-error" class="error" role="alert" tabindex="-1" hidden></p><p id="action-notice" class="notice" role="status" hidden></p><div id="records"></div>';
+  root.innerHTML='<div class="row"><div><h1>'+esc(names[tab]||names.targets)+'</h1>'+(['targets','runs'].includes(tab)?'<p class="muted">'+intro+'</p>':'')+'</div><div class="actions"><button id="refresh">'+tr("Refresh","更新")+'</button><button id="sign-out">'+tr("Sign out","ログアウト")+'</button></div></div><p class="muted">'+tr("Personal workspace · single-URL passive review","個人ワークスペース・単一URLの受動的検査")+'</p><p id="action-error" class="error" role="alert" tabindex="-1" hidden></p><p id="action-notice" class="notice" role="status" hidden></p><div id="records"></div>';
   $("#refresh").onclick=load;$("#sign-out").onclick=async()=>{try{await call("logout",{});epoch++;session=null;state=null;login();}catch(e){error(e);}};
   const records=$("#records");
+  if(["pentesting","reviews","fixes","coverage","infrastructure","reports","risk","findings"].includes(tab)){records.innerHTML=renderTask({tab,state,session,selection,tr,date});bindTasks();return;}
   if(tab==="targets"){
    records.innerHTML='<details id="add-target" '+(!state.targets.length?"open":"")+'><summary>'+tr("Add target","検査対象を追加")+'</summary><form id="target-form" class="editor"><label>'+tr("Name","名前")+'<input name="label" maxlength="100" required autocomplete="off"></label><label>'+tr("HTTPS root URL","HTTPSルートURL")+'<input name="url" type="url" placeholder="https://example.com/" required autocomplete="url"></label><label class="check"><input name="authorized" type="checkbox" required>'+tr("I own this target or have written authority to register it. Registration does not start a test.","この対象を所有している、または登録する書面の権限があります。登録だけでは検査は開始されません。")+'</label><button class="primary" type="submit">'+tr("Save target","対象を保存")+'</button></form></details><p class="notice">'+tr("Pilot execution: approved Mithril company origins only; one GET of the root URL, 15 seconds, 1 MiB. Other origins can be saved for onboarding.","パイロットの実行範囲：承認されたMithril自社オリジンのみ。ルートURLへのGET 1回、15秒・1MiB上限。他のオリジンは登録できます。")+'</p>'+
    state.targets.map(t=>'<article class="record" data-target="'+t.id+'"><div class="row"><div><h2>'+esc(t.label)+'</h2><p>'+esc(t.url)+'</p></div>'+badge(t.paused?"Paused":t.verifiedAt?"Verified":"Unverified")+'</div><details '+(!t.verifiedAt?"open":"")+'><summary>'+tr("Ownership verification","所有確認")+'</summary><p>'+tr("Add this DNS TXT record to the target domain, then verify.","対象ドメインに次のDNS TXTレコードを追加し、所有確認を実行してください。")+'</p><pre>'+esc(t.verification.name)+"\n"+esc(t.verification.value)+'</pre><button data-action="verify">'+tr("Verify control","所有確認を実行")+'</button></details><form class="run-form editor"><label class="check"><input name="authorized" type="checkbox" required>'+tr("I authorize one passive GET of this URL within the stated limits.","このURLへの受動的なGET 1回を、表示された上限内で許可します。")+'</label><div class="actions"><button class="primary" type="submit" '+(!t.verifiedAt||t.paused?"disabled":"")+'>'+tr("Run passive check","受動的検査を実行")+'</button><button type="button" data-action="pause">'+(t.paused?tr("Resume target","対象を再開"):tr("Pause target","対象を停止"))+'</button></div></form></article>').join("");
@@ -103,11 +110,28 @@ if(root){
    });
   }
  }
+
+ function download(value,filename){const url=URL.createObjectURL(new Blob([typeof value==='string'?value:JSON.stringify(value,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ function bindTasks(){
+  root.querySelectorAll('[data-select]').forEach(el=>el.onchange=()=>{selection[el.dataset.select]=el.value;delete selection.file;render();});
+  root.querySelectorAll('[data-file]').forEach(el=>el.onclick=()=>{selection.file=el.dataset.file;render();});
+  root.querySelectorAll('[data-select-finding]').forEach(el=>el.onclick=()=>{selection.finding=el.dataset.selectFinding;render();});
+  root.querySelectorAll('[data-coverage-run]').forEach(el=>el.onclick=()=>location.assign('/app/reports?lang='+encodeURIComponent(document.documentElement.lang)+'&run='+encodeURIComponent(el.dataset.coverageRun)));
+  root.querySelectorAll('[data-cancel-run]').forEach(el=>el.onclick=()=>action(()=>call('runs/'+el.dataset.cancelRun+'/cancel',{}),tr('Run cancelled.','実行を中止しました。')));
+  const pr=$('#pr-form');if(pr)pr.onsubmit=event=>{event.preventDefault();action(async()=>{const r=await call('reviews',{repository:pr.elements.repository.value,number:Number(pr.elements.number.value),authorized:pr.elements.authorized.checked});selection.review=r.id;},tr('PR review saved. Inspect source and partial coverage.','PRレビューを保存しました。ソースと検査範囲を確認してください。'));};
+  const triage=$('#task-triage');if(triage)triage.onsubmit=event=>{event.preventDefault();const f=state.findings.find(f=>f.id===triage.dataset.finding);action(()=>call('findings/'+f.id+'/triage',{status:triage.elements.status.value,note:triage.elements.note.value,version:f.version}),tr('Review saved.','確認結果を保存しました。'));};
+  const propose=$('#task-propose');if(propose)propose.onclick=()=>action(async()=>{const r=await call('fixes',{findingId:propose.dataset.finding});selection.fix=r.id;},tr('Proposal saved. Open Auto-Fix to review.','修正案を保存しました。Auto-Fixで確認してください。'));
+  root.querySelectorAll('.task-review-form').forEach(form=>form.onsubmit=event=>{event.preventDefault();const decision=event.submitter?.value;if(!['approve','reject'].includes(decision))return;action(()=>call('fixes/'+form.dataset.fix+'/'+decision,{note:form.elements.note.value,reviewed:form.elements.reviewed.checked}),tr('Proposal review saved.','修正案のレビューを保存しました。'));});
+  root.querySelectorAll('.task-retest').forEach(form=>form.onsubmit=event=>{event.preventDefault();startRun(form.dataset.target,form.elements.authorized.checked);});
+  root.querySelectorAll('[data-export-fix]').forEach(button=>button.onclick=()=>action(async()=>{const r=await call('fixes/'+button.dataset.exportFix+'/export',{});download(r.patch,r.filename);},tr('Configuration exported; no change was applied.','設定を出力しました。変更は適用されていません。')));
+  const report=$('#export-report');if(report)report.onclick=()=>{const run=state.runs.find(r=>r.id===selection.run)||state.runs[0];if(!run)return;download({schemaVersion:1,exportedAt:new Date().toISOString(),source:run.report?.source,run,findings:state.findings.filter(f=>f.run_id===run.id),fixes:state.fixes.filter(f=>f.run_id===run.id),scope:'recorded partial passive review'},'mithril-report-'+run.id+'.json');flash(tr('Report exported.','レポートを出力しました。'));};
+ }
+
  async function reloadAndNotice(text){await load();flash(text);}
  async function action(fn,text){if(root.dataset.mutating==="true")return;root.dataset.mutating="true";root.querySelectorAll("button").forEach(b=>b.disabled=true);
   try{await fn();await reloadAndNotice(text);}catch(e){await load();error(e);}finally{delete root.dataset.mutating;}}
  async function startRun(targetId,authorized){await action(()=>call("runs",{targetId,operation:crypto.randomUUID(),authorized}),tr("Run requested. Open Run history for status and coverage.","実行を依頼しました。実行履歴で状態と検査範囲を確認できます。"));}
- load();timer=setInterval(()=>{if(state?.runs.some(r=>["queued","running"].includes(r.status))&&root.dataset.mutating!=="true"&&tab==="runs")load();},3000);
+ load();timer=setInterval(()=>{if(state?.runs.some(r=>["queued","running"].includes(r.status))&&root.dataset.mutating!=="true"&&["runs","pentesting","coverage"].includes(tab))load();},3000);
  window.addEventListener("focus",()=>{if(root.dataset.mutating!=="true"&&!document.activeElement?.closest("form"))load();});
  window.addEventListener("pageshow",e=>{if(e.persisted)load();});
  window.addEventListener("pagehide",()=>{epoch++;clearInterval(timer);session=null;state=null;root.replaceChildren();});

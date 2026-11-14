@@ -6,6 +6,8 @@ import worker,{normalizeTarget,sha} from "./worker.mjs";
 import engine from "./engine.mjs";
 import vm from "node:vm";
 import {client} from "./ui.mjs";
+import './github.test.mjs';
+import './workspaces.test.mjs';
 new vm.Script(client,{filename:"browser-client.js"});
 const ORIGIN="https://cs.mithril.fund",A="a".repeat(32),B="b".repeat(32);
 const schema=readFileSync(new URL("./schema.sql",import.meta.url),"utf8");
@@ -32,6 +34,11 @@ function fixture(){
     const t=db.prepare("SELECT proof FROM cs_targets WHERE url=? ORDER BY created_at DESC LIMIT 1").get("https://"+host+"/");
     return Response.json({Status:0,Answer:t?[{type:16,data:'"mithril-cs='+t.proof+'"'}]:[]});}
    return Response.json({Status:0,Answer:u.searchParams.get("type")==="A"?[{type:1,data:badDNS?"127.0.0.1":"104.16.1.2"}]:[]});
+  }
+  if(u.hostname==="api.github.com"){
+   assert.equal(options.headers.authorization,undefined);assert.equal(options.redirect,'manual');
+   if(u.pathname.endsWith('/files'))return Response.json([{filename:'src/app.js',status:'modified',additions:1,deletions:0,patch:'@@ -1 +1 @@\n+eval(input);'}]);
+   return Response.json({title:'Fixture PR',changed_files:1,base:{repo:{full_name:'mithril-lang/mithril-cs'},sha:'b'.repeat(40)},head:{sha:'a'.repeat(40)}});
   }
   fetches.push({url:u.href,headers:options.headers,method:options.method,redirect:options.redirect});
   assert.equal(options.headers.cookie,undefined);assert.equal(options.headers.authorization,undefined);
@@ -65,6 +72,19 @@ test("actual compiled portable rules keep partial coverage and framing alternati
  assert.equal(engine.limits["max-pages"],1);assert.equal(engine.limits["response-bytes"],1048576);assert.equal(engine.limits["run-deadline-ms"],25000);
  assert.equal(result.findings.length,5);assert.equal(result.coverage.status,"partial");assert.equal(result.coverage["body-complete"],false);
  assert.equal(engine.transition("cancelled","partial"),false);assert.equal(engine.transition("approved","exported"),true);
+});
+
+test('PR review is explicit, scoped, source-bound, deduplicated and private',async()=>{
+ const f=fixture();await f.request('/api/session');
+ const input={repository:'mithril-lang/mithril-cs',number:8,authorized:true};
+ assert.equal((await f.request('/api/reviews',input,A,{origin:'https://evil.test'})).response.status,403);
+ assert.equal((await f.request('/api/reviews',{...input,repository:'foreign/repo'})).response.status,409);
+ const made=await f.request('/api/reviews',input);assert.equal(made.response.status,201,JSON.stringify(made.value));
+ const again=await f.request('/api/reviews',input);assert.equal(again.value.id,made.value.id);
+ const rows=(await f.request('/api/reviews')).value.reviews;assert.equal(rows.length,1);assert.equal(rows[0].data.head,'a'.repeat(40));assert.equal(rows[0].data.files[0].findings[0].rule,'MCS001');
+ assert.equal((await f.request('/api/reviews',undefined,B)).value.reviews.length,0);
+ assert.ok([...f.blobs.keys()].some(k=>k.startsWith('catalog-index/security/cs-reviews/')));
+ f.revoke(A);assert.equal((await f.request('/api/reviews')).response.status,401);
 });
 test("public routes, CSP, unknown routes, URL rejection and no implicit execution",async()=>{
  const f=fixture();for(const path of ["/","/features","/features/auto-fix","/enterprise","/blog","/blog/kubernetes-security-fundamentals","/pricing","/start","/app/targets","/app/runs","/app/findings","/app/fixes"]){

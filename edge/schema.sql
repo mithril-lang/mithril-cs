@@ -28,3 +28,10 @@ CREATE TABLE IF NOT EXISTS cs_audit (
  id TEXT PRIMARY KEY, owner TEXT NOT NULL, project TEXT NOT NULL, action TEXT NOT NULL, object_id TEXT NOT NULL,
  created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS cs_reviews (
+ id TEXT PRIMARY KEY, owner TEXT NOT NULL, project TEXT NOT NULL,
+ repository TEXT NOT NULL, pull_number INTEGER NOT NULL, head_sha TEXT NOT NULL,
+ data TEXT NOT NULL, evidence_sha256 TEXT NOT NULL, created_at INTEGER NOT NULL,
+ UNIQUE(owner,project,repository,pull_number,head_sha)
+);
+CREATE INDEX IF NOT EXISTS cs_reviews_owner ON cs_reviews(owner,project,created_at DESC);

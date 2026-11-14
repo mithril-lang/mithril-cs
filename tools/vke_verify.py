@@ -46,7 +46,7 @@ def terminal(pod):
                 return False
     return True
 
-def owned_memory_credit(stats, pod_uid, now):
+def owned_memory_credit(stats, pod_uid, now, limit_bytes=GIB):
     """Credit only measured bytes already consumed by this exact active Pod.
     Initial admission still requires the unchanged6GiB budget. The4GiB foreign
     reservation and1GiB unused headroom remain reserved throughout execution.
@@ -60,7 +60,8 @@ def owned_memory_credit(stats, pod_uid, now):
     node_time=datetime.datetime.fromisoformat(stats["node"]["memory"]["time"].replace("Z","+00:00")).timestamp()
     need(abs(node_time-observed)<=5, "own/node metric timestamps differ; no memory credit")
     used=memory.get("workingSetBytes")
-    need(type(used) is int and 0<=used<=GIB, "own Pod measured bytes exceed fixed1GiB limit")
+    need(limit_bytes in [GIB,768*1024*1024], "unsupported edge allocation")
+    need(type(used) is int and 0<=used<=limit_bytes, "own Pod measured bytes exceed fixed allocation")
     return used
 
 def main():
@@ -71,6 +72,8 @@ def main():
     p.add_argument("--node-uid", required=True)
     p.add_argument("--baseline", required=True, help="existing owner-reviewed CI platform policy JSON")
     p.add_argument("--edge-console", action="store_true", help="Compile portable edge policy and run authenticated console adapter tests")
+    p.add_argument("--edge-memory-mib",type=int,choices=[768,1024],default=1024,
+                   help="Explicit edge allocation; reserves legacy4GiB plus this allocation plus1GiB free margin")
     p.add_argument("--review-2487", action="store_true", help="Bounded company replay and candidate context evidence")
     p.add_argument("--zap", action="store_true", help="Standalone Mithril scanner full tests and passive HTTP dogfood")
     p.add_argument("--all-runtimes", action="store_true", help="Run JVM, compiled CLJS/Node and BB with pinned toolchain inputs")
@@ -79,6 +82,7 @@ def main():
     args = p.parse_args()
     if args.review_2487: args.zap = True
     if args.edge_console: args.all_runtimes = True
+    need(args.edge_console or args.edge_memory_mib==1024,"edge allocation requires edge recipe")
     image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9" if args.python_contracts else BB
     if args.zap: image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9"
     need(sum([args.zap,args.all_runtimes,args.python_contracts])<=1,"choose one recipe")
@@ -213,7 +217,7 @@ def main():
             if args.edge_console and spec.get("nodeName")==args.node and pod.get("status",{}).get("phase")=="Running":
                 need(own_metric_uid is None and not spec.get("ephemeralContainers")
                      and len(spec.get("containers",[]))==1
-                     and spec["containers"][0].get("resources",{}).get("limits",{}).get("memory")=="1Gi",
+                     and spec["containers"][0].get("resources",{}).get("limits",{}).get("memory")==("768Mi" if args.edge_memory_mib==768 else "1Gi"),
                      "own Pod credit boundary changed")
                 own_metric_uid=uid
         need(seen == set(platform), "platform disappeared")
@@ -231,6 +235,7 @@ def main():
             need((done and not job["metadata"].get("deletionTimestamp") and not job.get("status", {}).get("active") and not job.get("status", {}).get("terminating")) or job["metadata"]["uid"] == own, "concurrent Job hold")
         summary = kube("get", "--raw", "/api/v1/nodes/" + args.node + "/proxy/stats/summary")
         required=(6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5))*GIB
+        if args.edge_console: required=5*GIB+args.edge_memory_mib*1024*1024
         observe_until=time.monotonic()+15
         credit=0
         while True:
@@ -240,7 +245,7 @@ def main():
                 own_rows=[p for p in summary.get("pods",[]) if p.get("podRef",{}).get("uid")==own_metric_uid]
                 need(len(own_rows)<=1,"duplicate owned metrics; no memory credit")
                 try:
-                    credit=owned_memory_credit(summary,own_metric_uid,time.time())
+                    credit=owned_memory_credit(summary,own_metric_uid,time.time(),args.edge_memory_mib*1024*1024)
                 except RuntimeError as error:
                     need("exceed fixed" not in str(error),str(error))
                     credit=0
@@ -350,6 +355,7 @@ echo TINI_FIXTURE_PASS
         script = script[:script.index("cd /tmp/source")] + r"""
 cd /tmp/source
 python -I -B tools/router_recover.py --selftest
+python -B tools/test_edge_admission.py
 """
     if args.all_runtimes:
         script = script[:script.index("cd /tmp/source")] + r"""
@@ -396,6 +402,8 @@ node -e 'const fs=require("fs"),crypto=require("crypto");const b=fs.readFileSync
     if args.all_runtimes:
         container["resources"]={"requests":{"cpu":"200m","memory":"512Mi","ephemeral-storage":"1Gi"},
                                 "limits":{"cpu":"1","memory":"1Gi","ephemeral-storage":"2Gi"}}
+        if args.edge_console and args.edge_memory_mib==768:
+            container["resources"]["limits"]["memory"]="768Mi"
         container["volumeMounts"].append({"name":"tooling","mountPath":"/tooling"})
         spec["volumes"].append({"name":"tooling","emptyDir":{"sizeLimit":"256Mi"}})
         spec["volumes"][-2]["emptyDir"]["sizeLimit"]="1536Mi"

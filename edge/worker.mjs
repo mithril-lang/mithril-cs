@@ -1,6 +1,7 @@
 import engine from "./engine.mjs";
 import {page, css, client, logo, sitemap} from "./ui.mjs";
 import {social} from "./branding.mjs";
+import {reviewPullRequest} from "./github.mjs";
 const ORIGIN="https://cs.mithril.fund";
 const UUID=/^[a-f0-9-]{36}$/i;
 const SAFE_HEADERS=["content-type","content-length","strict-transport-security","x-content-type-options","content-security-policy","referrer-policy","x-frame-options"];
@@ -157,7 +158,17 @@ export async function api(req,env,ctx){
  const scope=await sha(JSON.stringify([actor.id,project,actor.csrf]));
  const reply=(v,status=200)=>{const r=json(v,status);r.headers.set("x-mithril-scope",scope);return r;};
  if(method==="GET"&&path==="/api/session")return reply({signedIn:true,csrf:actor.csrf,scope,project,source:env.SOURCE_SHA,
-  capabilities:{mode:"single-url-passive",maxPages:1,allowedHosts:(env.ALLOWED_HOSTS||"").split(","),autoFix:"review-export-retest",githubPullRequests:false,organizationWorkspaces:false}});
+  capabilities:{mode:"single-url-passive",maxPages:1,allowedHosts:(env.ALLOWED_HOSTS||"").split(","),autoFix:"review-export-retest",githubPullRequests:false,organizationWorkspaces:false,
+   publicReviewRepositories:(env.GITHUB_REPOSITORIES||"mithril-lang/mithril-cs").split(","),continuousScheduling:false}});
+ if(method==="GET"&&path==="/api/reviews")return reply({reviews:(await rows(env,"SELECT id,repository,pull_number,head_sha,data,evidence_sha256,created_at FROM cs_reviews WHERE owner=? AND project=? ORDER BY created_at DESC LIMIT 30",actor.id,project)).map(r=>({...r,data:JSON.parse(r.data)}))});
+ if(method==="GET"&&path==="/api/infrastructure")return reply({source:env.SOURCE_SHA,observedAt:Date.now(),kind:"configured-service-bindings",resources:[
+  {id:"cs",kind:"Worker",name:"mithril-cs",available:true},
+  {id:"auth",kind:"Service binding",name:"Mithril Auth",available:!!env.AUTH},
+  {id:"workspace",kind:"Service binding",name:"Mithril Workspace",available:!!env.WORKSPACE},
+  {id:"db",kind:"D1 binding",name:"CS application state",available:!!env.DB},
+  {id:"evidence",kind:"R2 binding",name:"Private evidence",available:!!env.EVIDENCE}],
+  edges:[["cs","auth"],["cs","workspace"],["cs","db"],["cs","evidence"]],
+  coverage:{networkPolicy:"not-observed",cloudInventory:"not-connected",credentialsExposed:false}});
  if(method==="GET"&&path==="/api/targets")return reply({targets:(await rows(env,"SELECT * FROM cs_targets WHERE owner=? AND project=? ORDER BY created_at DESC LIMIT 100",actor.id,project)).map(safeTarget)});
  if(method==="GET"&&path==="/api/runs")return reply({runs:(await rows(env,"SELECT id,target_id,target_version,status,created_at,started_at,finished_at,expires_at,report,error,evidence_sha256 FROM cs_runs WHERE owner=? AND project=? ORDER BY created_at DESC LIMIT 100",actor.id,project)).map(r=>({...r,report:r.report?JSON.parse(r.report):null}))});
  if(method==="GET"&&path==="/api/findings")return reply({findings:(await rows(env,"SELECT * FROM cs_findings WHERE owner=? AND project=? ORDER BY created_at DESC LIMIT 200",actor.id,project)).map(r=>({...r,owner:undefined,data:JSON.parse(r.data)}))});
@@ -166,6 +177,25 @@ export async function api(req,env,ctx){
  await writeGuard(req,actor);
  let body;try{body=JSON.parse(new TextDecoder().decode(await bounded(req,8192)));}catch(e){if(e instanceof Failure)throw e;fail(400,"invalid_json");}
  if(!body||typeof body!=="object"||Array.isArray(body))fail(400,"invalid_json");
+ if(method==="POST"&&path==="/api/reviews"){
+  if(body.authorized!==true)fail(400,"execution_acknowledgement_required");
+  const count=await first(env,"SELECT COUNT(*) AS n FROM cs_reviews WHERE owner=? AND created_at>?",actor.id,Date.now()-86400000);
+  if(count.n>=20)fail(429,"daily_run_limit");
+  let report;
+  try{report=await reviewPullRequest({repository:body.repository,number:body.number,
+   allowed:(env.GITHUB_REPOSITORIES||"mithril-lang/mithril-cs").split(","),reviewText:text=>engine.reviewText(text),sha,
+   read:async endpoint=>{const r=await fetch(endpoint,{headers:{accept:"application/vnd.github+json","user-agent":"Mithril-CS","x-github-api-version":"2022-11-28"},redirect:"manual",signal:AbortSignal.timeout(8000)});
+    if(!r.ok)throw new Error(r.status===403||r.status===429?"github_rate_limited":"github_unavailable");return data(r);}});
+  }catch(e){fail(409,["repository_not_enabled","github_source_changed","github_source_invalid","github_patch_limit","github_rate_limited","github_unavailable"].includes(e.message)?e.message:"github_unavailable");}
+  // Recheck the actual session/project after upstream I/O, before persistence.
+  const again=await identity(req,env);if(again.id!==actor.id)fail(403,"actor_changed");await projectAccess(req,env,again,project);
+  const old=await first(env,"SELECT id FROM cs_reviews WHERE owner=? AND project=? AND repository=? AND pull_number=? AND head_sha=?",actor.id,project,report.repository,report.number,report.head);if(old)return reply(old);
+  const id=crypto.randomUUID(),raw=JSON.stringify({...report,source:env.SOURCE_SHA}),digest=await sha(raw),key="cs-reviews/"+await sha(actor.id)+"/"+id+"/"+digest+".json";
+  await env.EVIDENCE.put(key,raw,{httpMetadata:{contentType:"application/json"}});const stored=await env.EVIDENCE.get(key);if(!stored||await sha(await stored.arrayBuffer())!==digest)fail(503,"evidence_readback_failed");
+  const index="catalog-index/security/cs-reviews/"+await sha(actor.id)+"/"+id+".json",manifest=JSON.stringify({schemaVersion:1,key,sha256:digest,source:env.SOURCE_SHA,bytes:bytes(raw).length,access:"private",retention:"preserve until authorized custody review"});
+  await env.EVIDENCE.put(index,manifest,{httpMetadata:{contentType:"application/json"}});const indexed=await env.EVIDENCE.get(index);if(!indexed||await sha(await indexed.arrayBuffer())!==await sha(manifest))fail(503,"catalog_readback_failed");
+  await stmt(env,"INSERT INTO cs_reviews VALUES(?,?,?,?,?,?,?,?,?)",id,actor.id,project,report.repository,report.number,report.head,raw,digest,Date.now()).run();await audit(env,actor.id,project,"review.created",id);return reply({id,head:report.head,coverage:report.coverage},201);
+ }
  if(method==="POST"&&path==="/api/logout"){
   const r=await env.AUTH.fetch(new Request("https://auth.mithril.fund/v1/logout",{method:"POST",headers:{cookie:"mf_session="+actor.token,origin:"https://auth.mithril.fund","content-type":"application/json"},body:"{}",redirect:"manual",signal:AbortSignal.timeout(8000)}));
   if(!r.ok)fail(503,"logout_pending");const h=new Headers({"cache-control":"no-store","content-type":"application/json","x-mithril-scope":scope});const c=r.headers.get("set-cookie");if(c)h.set("set-cookie",c);return new Response('{"ok":true}',{headers:h});
