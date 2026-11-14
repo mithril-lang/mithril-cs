@@ -162,6 +162,7 @@ export async function api(req,env,ctx){
   capabilities:{mode:"single-url-passive",maxPages:1,allowedHosts:(env.ALLOWED_HOSTS||"").split(","),autoFix:"review-export-retest",githubPullRequests:false,organizationWorkspaces:false,
    publicReviewRepositories:(env.GITHUB_REPOSITORIES||"mithril-lang/mithril-cs").split(","),continuousScheduling:false}});
  if(path.startsWith('/api/billing')){
+  if(env.CS_BILLING_MODE&&env.CS_BILLING_MODE!=='live')fail(503,'billing_mode_denied');
   if(project!=='personal')fail(409,'billing_personal_only');
   if(method==='GET'&&path==='/api/billing')return reply(await billingStatus(env,actor.id,engine.entitlement));
   if(method!=='POST')fail(405,'method_not_allowed');await writeGuard(req,actor);
@@ -171,7 +172,7 @@ export async function api(req,env,ctx){
   if(path==='/api/billing/reports'){
    const status=await billingStatus(env,actor.id,engine.entitlement);if(!status.entitled)fail(403,'pro_subscription_required');
    const reports=await rows(env,"SELECT id,status,report,created_at FROM cs_runs WHERE owner=? AND project='personal' ORDER BY created_at DESC LIMIT 100",actor.id);
-   return reply({source:env.SOURCE_SHA,coverage:'latest-100-personal-runs',reports:reports.map(r=>({...r,report:r.report?JSON.parse(r.report):null}))});
+   const exported={source:env.SOURCE_SHA,coverage:'latest-100-personal-runs',reports:reports.map(r=>({...r,report:r.report?JSON.parse(r.report):null}))};if(new TextEncoder().encode(JSON.stringify(exported)).length>1048576)fail(413,'response_limit');return reply(exported);
   }fail(404,'not_found');
  }
  if(method==="GET"&&path==="/api/reviews")return reply({reviews:(await rows(env,"SELECT id,repository,pull_number,head_sha,data,evidence_sha256,created_at FROM cs_reviews WHERE owner=? AND project=? ORDER BY created_at DESC LIMIT 30",actor.id,project)).map(r=>({...r,data:JSON.parse(r.data)}))});
@@ -310,7 +311,7 @@ function secure(response,privatePage=false){
 export default {async fetch(req,env,ctx){
  try{
   const u=new URL(req.url);if(u.origin!==ORIGIN)fail(421,"host_not_allowed");
-  if(u.pathname==="/api/billing/webhook"&&req.method==="POST")return secure(json(await webhook(req,env,engine.entitlement)),true);
+  if(u.pathname==="/api/billing/webhook"&&req.method==="POST"){if(env.CS_BILLING_MODE!=="live")fail(503,"billing_mode_denied");return secure(json(await webhook(req,env,engine.entitlement)),true);}
   if(u.pathname.startsWith("/api/"))return secure(await api(req,env,ctx),true);
   if(!["GET","HEAD"].includes(req.method))fail(405,"method_not_allowed");
   if(u.pathname==="/robots.txt"||u.pathname==="/sitemap.xml"){
