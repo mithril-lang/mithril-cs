@@ -25,7 +25,7 @@ function fixture(){
    if(new URL(req.url).pathname==="/v1/logout"){revoked.add(token);return Response.json({ok:true},{headers:{"set-cookie":"mf_session=; Max-Age=0; Domain=mithril.fund; Path=/; Secure; HttpOnly"}});}
    return Response.json({userId:token===A?"alice":"bob",assurance:"low"});}},
   WORKSPACE:{async fetch(req){const token=req.headers.get("cookie")?.slice(11);return Response.json({userId:token===A?"alice":"bob",documents:[{id:"owned-project",deleted:false}],nextAfter:null});}},
-  EVIDENCE:{async put(k,v){blobs.set(k,v);},async get(k){const v=blobs.get(k);return v===undefined?null:{arrayBuffer:async()=>new TextEncoder().encode(v).buffer};}}};
+  EVIDENCE:{async put(k,v){blobs.set(k,v);},async get(k){const v=blobs.get(k);return v===undefined?null:{size:new TextEncoder().encode(v).length,arrayBuffer:async()=>new TextEncoder().encode(v).buffer};}}};
  const ctx={waitUntil(p){jobs.push(p)}};
  globalThis.fetch=async (url,options={})=>{
   const u=new URL(url);
@@ -91,6 +91,7 @@ test('rate-limited public PR can use only a recent owner snapshot with explicit 
  const f=fixture();await f.request('/api/session');f.mode('github-rate');
  const repo='mithril-lang/mithril-cs',head='a'.repeat(40),base='b'.repeat(40),snapshot={schemaVersion:1,public:true,repository:repo,number:9,observedAt:Date.now(),head,base,pr:{title:'Public PR',changed_files:1,head:{sha:head},base:{sha:base,repo:{full_name:repo}}},files:[{filename:'a.js',status:'modified',additions:1,deletions:0,patch:'+eval(input);'}]};
  f.blobs.set('github-public-snapshots/'+repo+'/pull/9.json',JSON.stringify(snapshot));
+ const raw=JSON.stringify(snapshot);f.blobs.set('catalog-index/security/github-public-snapshots/'+repo+'/pull/9.json',JSON.stringify({bytes:new TextEncoder().encode(raw).length,sha256:await sha(raw),head,access:'private'}));
  const made=await f.request('/api/reviews',{repository:repo,number:9,authorized:true});assert.equal(made.response.status,201,JSON.stringify(made.value));
  const r=(await f.request('/api/reviews')).value.reviews[0];assert.equal(r.data.sourceFreshness,'owner-public-snapshot-current-head-unverified');assert.equal(r.data.snapshotObservedAt,snapshot.observedAt);assert.equal(r.data.coverage.status,'partial');
  snapshot.number=10;snapshot.observedAt-=1800001;f.blobs.set('github-public-snapshots/'+repo+'/pull/10.json',JSON.stringify(snapshot));

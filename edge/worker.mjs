@@ -190,7 +190,10 @@ export async function api(req,env,ctx){
   }catch(e){
    if(e.message==='github_rate_limited'&&input.allowed.includes(body.repository)&&/^mithril-lang\/[a-zA-Z0-9_.-]+$/.test(body.repository)&&Number.isSafeInteger(body.number)&&body.number>0&&body.number<=1000000){
     const object=await env.EVIDENCE.get('github-public-snapshots/'+body.repository+'/pull/'+body.number+'.json');
-    if(object){try{const raw=await object.arrayBuffer();if(raw.byteLength>1048576)throw Error('github_snapshot_unavailable');const snapshot=JSON.parse(new TextDecoder().decode(raw));
+    if(object){try{if(!Number.isSafeInteger(object.size)||object.size>1048576)throw Error('github_snapshot_unavailable');
+     const catalog=await env.EVIDENCE.get('catalog-index/security/github-public-snapshots/'+body.repository+'/pull/'+body.number+'.json');if(!catalog||!Number.isSafeInteger(catalog.size)||catalog.size>16384)throw Error('github_snapshot_unavailable');
+     const raw=await object.arrayBuffer(),manifest=JSON.parse(new TextDecoder().decode(await catalog.arrayBuffer())),snapshot=JSON.parse(new TextDecoder().decode(raw));
+     if(raw.byteLength!==manifest.bytes||await sha(raw)!==manifest.sha256||manifest.head!==snapshot.head||manifest.access!=='private')throw Error('github_snapshot_unavailable');
      report={...await reviewPullRequest({...input,read:snapshotReader(snapshot,{repository:body.repository,number:body.number,now:Date.now()})}),sourceFreshness:'owner-public-snapshot-current-head-unverified',snapshotObservedAt:snapshot.observedAt};
     }catch{fail(409,'github_snapshot_unavailable');}}
    }
