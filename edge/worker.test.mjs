@@ -1,3 +1,4 @@
+import './navigation.test.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {DatabaseSync} from "node:sqlite";
@@ -6,9 +7,25 @@ import worker,{normalizeTarget,sha} from "./worker.mjs";
 import engine from "./engine.mjs";
 import vm from "node:vm";
 import {client} from "./ui.mjs";
+import {fonts} from "./fonts.mjs";
 import './github.test.mjs';
 import './workspaces.test.mjs';
 new vm.Script(client,{filename:"browser-client.js"});
+test('Figma fonts are served as exact licensed source bytes from this origin with restrictive CSP',async()=>{
+ const provenance=JSON.parse(readFileSync(new URL('./fonts.PROVENANCE.json',import.meta.url),'utf8'));
+ for(const font of provenance.fonts){
+  const r=await worker.fetch(new Request('https://cs.mithril.fund'+font.path),{},{});
+  assert.equal(r.status,200);assert.equal(r.headers.get('content-type'),'font/woff2');
+  assert.match(r.headers.get('content-security-policy'),/font-src 'self'/);
+  const bytes=new Uint8Array(await r.arrayBuffer());assert.equal(bytes.length,font.bytes);assert.equal(await sha(bytes),font.sha256);
+  assert.equal(new TextDecoder().decode(bytes.slice(0,4)),'wOF2');assert.equal(fonts[font.path].sha256,font.sha256);
+  const head=await worker.fetch(new Request('https://cs.mithril.fund'+font.path,{method:'HEAD'}),{},{});assert.equal((await head.arrayBuffer()).byteLength,0);
+ }
+ const response=await worker.fetch(new Request('https://cs.mithril.fund/style.css'),{},{});const css=await response.text();
+ assert.match(css,/font-family:"Noto Sans",system-ui,sans-serif/);assert.match(css,/font-family:"Roboto Mono",ui-monospace,monospace/);
+ assert.doesNotMatch(css,/fonts\.googleapis|fonts\.gstatic|font-family:Arial/);
+ assert.doesNotMatch(client,/Refresh and retry|Refresh before|Refresh and review/);
+});
 const ORIGIN="https://cs.mithril.fund",A="a".repeat(32),B="b".repeat(32);
 const schema=readFileSync(new URL("./schema.sql",import.meta.url),"utf8");
 function fixture(){

@@ -1,4 +1,5 @@
 import engine from "./engine.mjs";
+import {fonts} from "./fonts.mjs";
 import {page, css, client, logo, sitemap} from "./ui.mjs";
 import {social} from "./branding.mjs";
 import {reviewPullRequest,snapshotReader} from "./github.mjs";
@@ -290,7 +291,7 @@ function secure(response,privatePage=false){
  const h=new Headers(response.headers);h.set("x-content-type-options","nosniff");h.set("referrer-policy","strict-origin-when-cross-origin");
  h.set("strict-transport-security","max-age=31536000");h.set("x-frame-options","DENY");
  h.set("permissions-policy","camera=(), microphone=(), geolocation=()");
- h.set("content-security-policy","default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+ h.set("content-security-policy","default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
  if(privatePage)h.set("cache-control","no-store");return new Response(response.body,{status:response.status,headers:h});
 }
 export default {async fetch(req,env,ctx){
@@ -306,6 +307,11 @@ export default {async fetch(req,env,ctx){
    const object=await env.EVIDENCE.get(social.key);
    if(!object)return secure(new Response("Image unavailable",{status:503,headers:{"cache-control":"no-store"}}));
    return secure(new Response(req.method==="HEAD"?null:object.body,{headers:{"content-type":"image/png","content-length":String(social.bytes),"cache-control":"public, max-age=31536000, immutable","etag":'"'+social.sha256+'"'}}));
+  }
+  const font=Object.hasOwn(fonts,u.pathname)?fonts[u.pathname]:null;
+  if(font){
+   const body=req.method==="HEAD"?null:Uint8Array.from(atob(font.base64),c=>c.charCodeAt(0));
+   return secure(new Response(body,{headers:{"content-type":"font/woff2","content-length":String(font.bytes),"cache-control":"public, max-age=31536000, immutable","etag":'"'+font.sha256+'"'}}));
   }
   const asset=u.pathname==="/app.js"?[client,"text/javascript; charset=utf-8"]:u.pathname==="/style.css"?[css,"text/css; charset=utf-8"]:u.pathname==="/mithril.svg"?[logo,"image/svg+xml"]:null;
   if(asset)return secure(new Response(req.method==="HEAD"?null:asset[0],{headers:{"content-type":asset[1],"cache-control":"public, max-age=300"}}));

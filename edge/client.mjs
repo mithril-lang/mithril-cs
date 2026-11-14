@@ -12,14 +12,16 @@ $("#locale").addEventListener("change",event=>{const u=new URL(location.href);u.
 const root=$("#workspace");
 if(root){
  let session=null,state=null,epoch=0,busy=false,timer=null,selection={};
- const tab=location.pathname.split("/")[2]||"pentesting";
+ let tab=location.pathname.split("/")[2]||"pentesting",focusView=false;
+ const account=$("#account-menu");
+ const channel=typeof BroadcastChannel!=="undefined"?new BroadcastChannel("mithril-cs-session"):null;
  selection.run=new URL(location.href).searchParams.get("run");
  const statusNames={"queued":tr("Queued","待機中"),"running":tr("Running","実行中"),"partial":tr("Partial coverage","部分検査"),"failed":tr("Failed","失敗"),"cancelled":tr("Cancelled","中止"),"unknown":tr("Outcome unknown","結果不明"),"proposed":tr("Proposed","提案中"),"approved":tr("Approved · not applied","承認済み・未適用"),"rejected":tr("Rejected","却下"),"exported":tr("Exported · application unverified","出力済み・適用未確認"),"needs-review":tr("Needs review","要確認"),"acknowledged":tr("Acknowledged","確認済み"),"dismissed":tr("Dismissed","対象外")};
  const badge=x=>'<span class="status">'+esc(statusNames[x]||x)+"</span>";
  const date=x=>x?new Date(x).toLocaleString():tr("Not recorded","記録なし");
  const names={targets:tr("Targets","検査対象"),runs:tr("Run history","実行履歴"),findings:tr("Findings","検出結果"),fixes:"Auto-Fix",pentesting:tr("Autonomous pentesting","自律ペンテスト"),reviews:tr("Pull request review","PRレビュー"),coverage:tr("Continuous coverage","継続監視"),infrastructure:tr("Infrastructure","インフラ"),reports:tr("Security report","セキュリティレポート"),risk:tr("Findings and risk","検出結果とリスク")};
  const errors={
-  github_snapshot_unavailable:tr("No recent verified public-source snapshot is available. Refresh the source through the repository integration before retrying.","新しい検証済み公開ソースのスナップショットがありません。リポジトリ連携でソースを更新後、再試行してください。"),
+  github_snapshot_unavailable:tr("No recent verified public-source snapshot is available. Update the source through the repository integration before retrying.","新しい検証済み公開ソースのスナップショットがありません。リポジトリ連携でソースを更新後、再試行してください。"),
   github_source_changed:tr("The PR changed during review. Retry to review the current source.","レビュー中にPRが更新されました。最新のソースで再試行してください。"),
   github_rate_limited:tr("GitHub rate-limited this read. Wait before retrying; no result was saved.","GitHubの取得上限に達しました。時間をおいて再試行してください。結果は保存されていません。"),
   github_unavailable:tr("The public PR could not be read. Check the repository and PR number.","公開PRを取得できませんでした。リポジトリとPR番号を確認してください。"),
@@ -31,26 +33,31 @@ if(root){
   stale_fix:tr("The target scope changed. Run a new review and generate a new proposal.","対象の範囲が変更されました。再検査して新しい修正案を作成してください。"),
   stale_finding:tr("The target scope changed. Run a new review first.","対象の範囲が変更されました。先に再検査してください。"),
   run_already_active:tr("This target already has an active run. Open Run history.","この対象は実行中です。実行履歴を確認してください。"),
-  csrf_denied:tr("Your session changed. Refresh before trying again.","セッションが変更されました。再読み込みしてください。"),
+  csrf_denied:tr("Your session changed. Sign in again before continuing.","セッションが変更されました。もう一度ログインしてください。"),
   daily_run_limit:tr("The pilot limit is 20 runs per account per day.","パイロットの上限は1アカウントあたり1日20回です。"),
   target_limit:tr("The pilot limit is 20 targets per workspace.","パイロットの上限はワークスペースあたり20対象です。"),
   unqualified_destination:tr("This network destination is not enabled for the current pilot.","このネットワーク宛先は現在のパイロットで実行できません。"),
-  finding_changed:tr("This finding was updated. Refresh and review the current version.","この検出結果は更新されています。最新の状態を確認してください。"),
-  fix_state_changed:tr("The proposal state changed. Refresh before reviewing.","修正案の状態が変更されています。再読み込みしてください。")
+  finding_changed:tr("This finding was updated. Open it again to review the current version.","この検出結果は更新されています。最新の状態を確認してください。"),
+  fix_state_changed:tr("The proposal state changed. Open it again before reviewing.","修正案の状態が変更されています。開き直して確認してください。")
  };
- const message=e=>errors[e.code]||tr("The operation could not be completed. Refresh and retry. Code: ","操作を完了できませんでした。状態を確認して再試行してください。コード：")+e.code;
+ const message=e=>errors[e.code]||tr("The operation could not be completed. Please try again. Code: ","操作を完了できませんでした。状態を確認して再試行してください。コード：")+e.code;
  async function call(path,body){
-  const write=body!==undefined,r=await fetch("/api/"+path,{method:write?"POST":"GET",credentials:"same-origin",cache:"no-store",headers:write?{"content-type":"application/json","x-csrf-token":session?.csrf||""}:{},body:write?JSON.stringify(body):undefined});
+  const requestEpoch=epoch,requestScope=session?.scope,navigationBound=path!=="logout",write=body!==undefined,r=await fetch("/api/"+path,{method:write?"POST":"GET",credentials:"same-origin",cache:"no-store",headers:write?{"content-type":"application/json","x-csrf-token":session?.csrf||""}:{},body:write?JSON.stringify(body):undefined});
+  if(navigationBound&&requestEpoch!==epoch)throw {code:"request_superseded"};
   let data;try{data=await r.json();}catch{throw {code:"invalid_response"};}
-  if(!r.ok){if(r.status===401){epoch++;session=null;state=null;login();}throw {code:data.error?.code||"request_failed"};}
+  if(navigationBound&&requestEpoch!==epoch)throw {code:"request_superseded"};
+  if(!r.ok){if(r.status===401&&session){invalidate();}throw {code:data.error?.code||"request_failed"};}
   const scope=r.headers.get("x-mithril-scope");
   if(path==="session"){if(!scope||scope!==data.scope)throw {code:"session_changed"};}
-  else if(session&&scope!==session.scope){epoch++;session=null;state=null;login();throw {code:"session_changed"};}
+  else if(path==="logout"?(!requestScope||scope!==requestScope):(session&&scope!==session.scope)){invalidate();throw {code:"session_changed"};}
   return data;
  }
  function error(e){const el=$("#action-error");if(el){el.hidden=false;el.textContent=message(e);el.focus();}}
  function flash(text){const el=$("#action-notice");if(el){el.hidden=false;el.textContent=text;}}
+ function invalidate(){epoch++;busy=false;session=null;state=null;selection={};login();}
+ if(channel)channel.onmessage=e=>{if(e.data==="signed-out")invalidate();};
  function login(){
+  if(account){account.hidden=true;account.open=false;}
   root.removeAttribute("aria-busy");root.innerHTML='<h1>'+tr("Sign in to Mithril CS","Mithril CSへログイン")+'</h1><p class="muted">'+tr("Use your existing Mithril account. Your targets and results stay private.","既存のMithrilアカウントを使用します。対象と結果は非公開です。")+'</p><button class="primary" id="sign-in">'+tr("Sign in","ログイン")+'</button><p id="login-status" role="status"></p>';
   $("#sign-in").onclick=()=>{const popup=window.open("https://auth.mithril.fund/sign-in","mithril-cs-sign-in","popup,width=600,height=760");
    $("#login-status").textContent=tr("Complete sign-in in the Mithril window, then return here.","Mithrilのウィンドウでログインを完了し、こちらへ戻ってください。");
@@ -58,15 +65,40 @@ if(root){
    let tries=0;const check=setInterval(async()=>{if(++tries>120){clearInterval(check);return;}try{const s=await call("session");session=s;clearInterval(check);if(popup&&!popup.closed)popup.close();await load();}catch{}},3000);
   };
  }
- async function load(){
-  if(busy)return;busy=true;const version=++epoch;
+ async function load({force=false,revalidate=false}={}){
+  if(busy&&!force)return;busy=true;const version=++epoch;
   try{
-   const s=await call("session");if(version!==epoch)return;session=s;
+   if(!session||revalidate){const s=await call("session");if(version!==epoch)return;session=s;}
    const values=await Promise.all(["targets","runs","findings","fixes","reviews","infrastructure"].map(x=>call(x)));
    if(version!==epoch)return;state={targets:values[0].targets,runs:values[1].runs,findings:values[2].findings,fixes:values[3].fixes,reviews:values[4].reviews,infrastructure:values[5]};
-   render();
-  }catch(e){if(version!==epoch)return;if(e.code==="sign_in_required")login();else{root.removeAttribute("aria-busy");root.innerHTML='<h1>'+esc(names[tab]||names.targets)+'</h1><p class="error" role="alert">'+esc(message(e))+'</p><button id="retry-load">'+tr("Retry","再試行")+"</button>";$("#retry-load").onclick=load;}}
-  finally{busy=false;}
+   render();if(account)account.hidden=false;
+   if(focusView){const heading=$("h1",root);if(heading){heading.tabIndex=-1;heading.focus();}focusView=false;}
+  }catch(e){if(version!==epoch)return;if(e.code==="sign_in_required")login();else{root.removeAttribute("aria-busy");root.innerHTML='<h1>'+esc(names[tab]||names.targets)+'</h1><p class="error" role="alert">'+esc(message(e))+'</p><button id="retry-load">'+tr("Retry","再試行")+"</button>";$("#retry-load").onclick=()=>{loading();focusView=true;load();};}}
+  finally{if(version===epoch)busy=false;}
+ }
+ function loading(){
+  root.setAttribute("aria-busy","true");root.innerHTML='<h1>'+esc(names[tab]||names.pentesting)+'</h1><div class="cs-loading" aria-hidden="true"><span></span><span></span><span></span></div><p class="screen-reader" role="status">'+tr("Loading workspace data","管理データを読み込んでいます")+'</p>';
+ }
+ function route(url,push=true){
+  const next=url.pathname.split('/')[2]||'pentesting';if(!Object.hasOwn(names,next)||!['/app','/app/'+next].includes(url.pathname.replace(/\/$/,'')))return false;
+  if(url.origin!==location.origin||url.searchParams.get('lang')!==document.documentElement.lang)return false;
+  if(root.dataset.mutating==='true')return false;
+  if(push)history.pushState(null,'',url.pathname+url.search+url.hash);
+  tab=next;selection={run:url.searchParams.get('run')};state=null;focusView=true;document.title=names[tab]+' | Mithril CS';
+  const activePath=url.pathname.replace(/\/$/,'')==='/app'?'/app/pentesting':url.pathname.replace(/\/$/,'');
+  document.querySelectorAll('.cs-side a').forEach(a=>{if(new URL(a.href).pathname===activePath)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+  if(account)account.open=false;loading();load({force:true});return true;
+ }
+ document.addEventListener('click',event=>{
+  const a=event.target.closest?.('a[href]');if(!a||event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||a.target||a.hasAttribute('download'))return;
+  const url=new URL(a.href);if(!url.pathname.startsWith('/app')||url.hash)return;
+  if(route(url))event.preventDefault();
+ });
+ window.addEventListener('popstate',()=>{if(!route(new URL(location.href),false))location.reload();});
+ if(account){
+  $('#sign-out').onclick=async()=>{try{await call('logout',{});channel?.postMessage('signed-out');invalidate();}catch(e){error(e);}};
+  account.addEventListener('keydown',e=>{if(e.key==='Escape'){account.open=false;account.querySelector('summary').focus();}});
+  document.addEventListener('click',e=>{if(!account.contains(e.target))account.open=false;});
  }
  const targetName=id=>state.targets.find(t=>t.id===id)?.label||id;
  function render(){
@@ -75,8 +107,8 @@ if(root){
    tab==="runs"?tr("Source-bound receipts, received responses and incomplete coverage. Latest 100 runs.","ソースに紐づく記録、取得応答、未検査範囲。最新100実行を表示します。"):
    tab==="findings"?tr("Review candidates in context. Acknowledgement does not confirm an exploitable vulnerability. Latest 200 observations.","文脈と根拠を確認してください。確認済みの操作は、悪用可能性の証明ではありません。最新200観測を表示します。"):
    tr("Generate, review and export evidence-bound header configurations, then retest. Export does not deploy a change.","根拠に紐づくヘッダー設定を生成・確認・出力し、再検査します。出力では本番設定は変更されません。");
-  root.innerHTML='<div class="row"><div><h1>'+esc(names[tab]||names.targets)+'</h1>'+(['targets','runs'].includes(tab)?'<p class="muted">'+intro+'</p>':'')+'</div><div class="actions"><button id="refresh">'+tr("Refresh","更新")+'</button><button id="sign-out">'+tr("Sign out","ログアウト")+'</button></div></div><p class="muted">'+tr("Personal workspace · single-URL passive review","個人ワークスペース・単一URLの受動的検査")+'</p><p id="action-error" class="error" role="alert" tabindex="-1" hidden></p><p id="action-notice" class="notice" role="status" hidden></p><div id="records"></div>';
-  $("#refresh").onclick=load;$("#sign-out").onclick=async()=>{try{await call("logout",{});epoch++;session=null;state=null;login();}catch(e){error(e);}};
+  root.innerHTML='<div class="row"><div><h1>'+esc(names[tab]||names.targets)+'</h1>'+(['targets','runs'].includes(tab)?'<p class="muted">'+intro+'</p>':'')+'</div></div><p class="muted">'+tr("Personal workspace · single-URL passive review","個人ワークスペース・単一URLの受動的検査")+'</p><p id="action-error" class="error" role="alert" tabindex="-1" hidden></p><p id="action-notice" class="notice" role="status" hidden></p><div id="records"></div>';
+
   const records=$("#records");
   if(["pentesting","reviews","fixes","coverage","infrastructure","reports","risk","findings"].includes(tab)){records.innerHTML=renderTask({tab,state,session,selection,tr,date});bindTasks();return;}
   if(tab==="targets"){
@@ -117,7 +149,7 @@ if(root){
   root.querySelectorAll('[data-select]').forEach(el=>el.onchange=()=>{selection[el.dataset.select]=el.value;delete selection.file;render();});
   root.querySelectorAll('[data-file]').forEach(el=>el.onclick=()=>{selection.file=el.dataset.file;render();});
   root.querySelectorAll('[data-select-finding]').forEach(el=>el.onclick=()=>{selection.finding=el.dataset.selectFinding;render();});
-  root.querySelectorAll('[data-coverage-run]').forEach(el=>el.onclick=()=>location.assign('/app/reports?lang='+encodeURIComponent(document.documentElement.lang)+'&run='+encodeURIComponent(el.dataset.coverageRun)));
+  root.querySelectorAll('[data-coverage-run]').forEach(el=>el.onclick=()=>route(new URL('/app/reports?lang='+encodeURIComponent(document.documentElement.lang)+'&run='+encodeURIComponent(el.dataset.coverageRun),location.origin)));
   root.querySelectorAll('[data-cancel-run]').forEach(el=>el.onclick=()=>action(()=>call('runs/'+el.dataset.cancelRun+'/cancel',{}),tr('Run cancelled.','実行を中止しました。')));
   const pr=$('#pr-form');if(pr)pr.onsubmit=event=>{event.preventDefault();action(async()=>{const r=await call('reviews',{repository:pr.elements.repository.value,number:Number(pr.elements.number.value),authorized:pr.elements.authorized.checked});selection.review=r.id;},tr('PR review saved. Inspect source and partial coverage.','PRレビューを保存しました。ソースと検査範囲を確認してください。'));};
   const triage=$('#task-triage');if(triage)triage.onsubmit=event=>{event.preventDefault();const f=state.findings.find(f=>f.id===triage.dataset.finding);action(()=>call('findings/'+f.id+'/triage',{status:triage.elements.status.value,note:triage.elements.note.value,version:f.version}),tr('Review saved.','確認結果を保存しました。'));};
@@ -133,8 +165,8 @@ if(root){
   try{await fn();await reloadAndNotice(text);}catch(e){await load();error(e);}finally{delete root.dataset.mutating;}}
  async function startRun(targetId,authorized){await action(()=>call("runs",{targetId,operation:crypto.randomUUID(),authorized}),tr("Run requested. Open Run history for status and coverage.","実行を依頼しました。実行履歴で状態と検査範囲を確認できます。"));}
  load();timer=setInterval(()=>{if(state?.runs.some(r=>["queued","running"].includes(r.status))&&root.dataset.mutating!=="true"&&["runs","pentesting","coverage"].includes(tab))load();},3000);
- window.addEventListener("focus",()=>{if(root.dataset.mutating!=="true"&&!document.activeElement?.closest("form"))load();});
- window.addEventListener("pageshow",e=>{if(e.persisted)load();});
- window.addEventListener("pagehide",()=>{epoch++;clearInterval(timer);session=null;state=null;root.replaceChildren();});
+ window.addEventListener("focus",()=>{if(root.dataset.mutating!=="true"&&!document.activeElement?.closest("form"))load({revalidate:true});});
+ window.addEventListener("pageshow",e=>{if(e.persisted){loading();load({force:true,revalidate:true});timer=setInterval(()=>{if(state?.runs.some(r=>["queued","running"].includes(r.status)))load();},3000);}});
+ window.addEventListener("pagehide",()=>{epoch++;busy=false;clearInterval(timer);session=null;state=null;if(account)account.hidden=true;root.replaceChildren();});
 }
 `;
