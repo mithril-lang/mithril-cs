@@ -16,6 +16,9 @@ class ReviewTests(unittest.TestCase):
  def test_coordinate_false_positive(self):
   r=context_and_disposition("https://example.test/",{"body":"10 20 30 40","headers":{}},{"rule-id":"40040","title":"Internal IP","evidence":"10 20 30 40"})
   self.assertEqual("suppressed",r["disposition"])
+ def test_svg_policy_not_cleared(self):
+  r=context_and_disposition("https://example.test/logo.svg",{"body":"<svg/>","headers":{"content-type":"image/svg+xml"}},{"rule-id":"40059","title":"Missing Content-Security-Policy","evidence":""})
+  self.assertEqual("deferred",r["disposition"])
  def test_sensitive_url_redaction(self):
   self.assertNotIn("privatevalue",safeurl("https://example.test/?token=privatevalue&lang=en"))
 if __name__=="__main__":unittest.main()

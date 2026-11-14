@@ -83,6 +83,8 @@ def context_and_disposition(url,response,finding):
   control=next((v for k,v in names if k in lower),title)
   result["root_control"]=control
   if control in ["coop","coep","corp"]:result["reason"]="optional cross-origin isolation/resource policy; universal absence does not prove a vulnerability"
+  elif "svg" in ctype and control in ["csp","frame-ancestors","permissions-policy","referrer-policy"]:
+   result.update(disposition="deferred",reason="SVG can be an active document; embedding, scripting and document policy require browser-context validation")
   elif not doc and control in ["csp","frame-ancestors","permissions-policy","referrer-policy"]:
    result.update(disposition="not_applicable",survives="no",confidence="high",reason="missing document policy on a fixed non-HTML asset is not the claimed document control failure")
   elif doc:result["reason"]="header absence observed on actual HTML; hardening gap retained for product/security review, not an exploit confirmation"
