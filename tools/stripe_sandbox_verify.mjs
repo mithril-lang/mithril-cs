@@ -1,6 +1,6 @@
 // Manual owner-side provider verification. Never run with live credentials or
 // inside PR/VKE jobs. Temporary secrets and generated evidence stay outside Git.
-import {readFileSync,writeFileSync,mkdirSync,chmodSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,chmodSync,existsSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {createServer} from 'node:http';
@@ -22,7 +22,12 @@ db.exec(readFileSync(new URL('../edge/schema.sql',import.meta.url),'utf8'));
 const DB={prepare(sql){let values=[];const q={bind(...args){values=args;return q;},async first(){return db.prepare(sql).get(...values)||null;},async all(){return {results:db.prepare(sql).all(...values)};},async run(){return {meta:{changes:Number(db.prepare(sql).run(...values).changes)}};}};return q;}};
 const env={DB,SOURCE_SHA:source,STRIPE_CS_KEY:key,STRIPE_CS_WEBHOOK_SECRET:readFileSync(join(state,'sandbox-webhook.pending'),'utf8').trim(),STRIPE_CS_PRICE:cfg.price,STRIPE_CS_PORTAL_CONFIG:cfg.portal,CS_BILLING_MODE:'test',CS_BILLING_ISOLATED_TEST:'true',CS_BILLING_TAX_READY:'true'};
 const account=await stripe(env,'account');if(account.id!==TEST_MERCHANT)throw Error('Sandbox account mismatch');
-const owner='sandbox-MITHRIL-2517-'+randomUUID(),operation=randomUUID(),receipts=[];
+const priorOwners=db.prepare("SELECT owner FROM cs_billing WHERE owner LIKE 'sandbox-MITHRIL-2517-%'").all();
+if(priorOwners.length>1)throw Error('Multiple sandbox operations need owner reconciliation');
+const owner=priorOwners[0]?.owner||'sandbox-MITHRIL-2517-'+randomUUID();
+const receiptPath=join(state,'provider-verification.json');
+const receipts=existsSync(receiptPath)?JSON.parse(readFileSync(receiptPath,'utf8')):[];
+if(!Array.isArray(receipts)||receipts.length>2000)throw Error('Bounded receipt history required');
 function receipt(kind,data={}){const r={kind,time:new Date().toISOString(),source,sandbox:TEST_MERCHANT,...data};receipts.push(r);writeFileSync(join(state,'provider-verification.json'),JSON.stringify(receipts,null,2),{mode:0o600});console.log(JSON.stringify(r));}
 const port=18087;
 const server=createServer(async(req,res)=>{
@@ -48,7 +53,7 @@ const observedSecret=output.match(/whsec_[A-Za-z0-9]+/)?.[0];
 if(observedSecret&&observedSecret!==env.STRIPE_CS_WEBHOOK_SECRET)throw Error('Listener signing identity mismatch');
 output='';receipt('listener-ready',{transport:'Stripe CLI loopback forwarding; production public webhook not tested'});
 const result=await checkout(env,owner,{acceptedTerms:TERMS,recurring:true,locale:'en'},engine.entitlement);
-writeFileSync(join(state,'provider-checkout.json'),JSON.stringify({owner,operation,source,...result}),{mode:0o600});
+writeFileSync(join(state,'provider-checkout.json'),JSON.stringify({owner,source,...result}),{mode:0o600});
 receipt('adapter-checkout-created',{entitled:(await billingStatus(env,owner,engine.entitlement)).entitled});
 let last='';const timer=setInterval(async()=>{
  try{const status=await billingStatus(env,owner,engine.entitlement),signature=JSON.stringify([status.state,status.entitled,status.riskHold,status.cancelAtPeriodEnd]);

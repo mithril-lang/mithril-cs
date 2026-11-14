@@ -7,7 +7,7 @@ export const SERVICE='mithril-cs-pro-v1';
 const ORIGIN='https://cs.mithril.fund';
 export class BillingError extends Error {constructor(status,code){super(code);this.status=status;this.code=code;}}
 const stop=(code,status=409)=>{throw new BillingError(status,code)};
-const id=(v,p)=>{if(typeof v!=='string'||!new RegExp('^'+p+'_[A-Za-z0-9]+$').test(v))stop('billing_provider_invalid',503);return v;};
+const id=(v,p)=>{if(typeof v!=='string'||!new RegExp('^'+p+'_'+(p==='cs'?'(?:test_|live_)':'')+'[A-Za-z0-9]+$').test(v))stop('billing_provider_invalid',503);return v;};
 const q=(env,sql,...values)=>env.DB.prepare(sql).bind(...values);
 const row=(env,owner)=>q(env,'SELECT * FROM cs_billing WHERE owner=?',owner).first();
 const hash=async value=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(x=>x.toString(16).padStart(2,'0')).join('');
