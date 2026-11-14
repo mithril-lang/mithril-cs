@@ -30,7 +30,7 @@ function fixture(){
   else if(p.startsWith('subscriptions/')){d=JSON.parse(JSON.stringify(subs.get(p.slice(14))));if(hold){const wait=hold;hold=null;entered();await wait;}}
   else if(p.startsWith('invoices/'))d=invoices.get(p.slice(9));
   else if(p==='checkout/sessions'&&opts.method==='POST'){
-   assert.equal(form.get('mode'),'subscription');assert.equal(form.get('line_items[0][price]'),'price_fixture');assert.equal(form.get('line_items[0][quantity]'),'1');assert.equal(form.get('automatic_tax[enabled]'),'true');assert.equal(form.get('payment_method_types[0]'),null);
+   assert.equal(form.get('mode'),'subscription');assert.equal(form.get('adaptive_pricing[enabled]'),'false');assert.equal(form.get('line_items[0][price]'),'price_fixture');assert.equal(form.get('line_items[0][quantity]'),'1');assert.equal(form.get('automatic_tax[enabled]'),'true');assert.equal(form.get('payment_method_types[0]'),null);
    d={id:'cs_fixture'+(++creates),customer:form.get('customer'),status:'open',url:badUrl?'https://foreign.invalid/pay':'https://checkout.stripe.com/c/pay_fixture',metadata:Object.fromEntries(['service','owner','operation','terms'].map(k=>[k,form.get('metadata['+k+']')])),livemode:true};sessions.set(d.id,d);
   }else if(p.startsWith('checkout/sessions/'))d=sessions.get(p.slice(18));
   else if(p==='billing_portal/configurations/bpc_fixture')d={active:true,metadata:{service:SERVICE},features:{subscription_cancel:{enabled:true,mode:'at_period_end'},subscription_update:{enabled:false},payment_method_update:{enabled:true},invoice_history:{enabled:true}},livemode:true};

@@ -106,7 +106,7 @@ export async function checkout(env,owner,body,entitlement){
  await q(env,'INSERT OR IGNORE INTO cs_billing_consents(operation,owner,terms,source,accepted_at) VALUES(?,?,?,?,?)',r.operation,owner,r.terms,env.SOURCE_SHA,r.operation_at).run();
  if(!r.customer_id){const customer=await stripe(env,'customers',{metadata:{service:SERVICE,owner:ownerHash}},'cs-pro:customer:'+ownerHash+':'+r.operation);
   await q(env,'UPDATE cs_billing SET customer_id=? WHERE owner=? AND operation=? AND customer_id IS NULL',id(customer.id,'cus'),owner,r.operation).run();r=await row(env,owner);}
- const session=await stripe(env,'checkout/sessions',{mode:'subscription',ui_mode:'hosted_page',customer:r.customer_id,locale:r.locale,
+ const session=await stripe(env,'checkout/sessions',{mode:'subscription',ui_mode:'hosted_page',adaptive_pricing:{enabled:false},customer:r.customer_id,locale:r.locale,
   line_items:[{price:env.STRIPE_CS_PRICE,quantity:1}],automatic_tax:{enabled:true},billing_address_collection:'required',customer_update:{address:'auto'},
   integration_identifier:'mithril-cs-pro-qtxpvjrw',client_reference_id:ownerHash,metadata:sameOwner(r,ownerHash),subscription_data:{metadata:sameOwner(r,ownerHash)},
   success_url:ORIGIN+'/app/billing?lang='+r.locale+'&checkout=return',cancel_url:ORIGIN+'/app/billing?lang='+r.locale+'&checkout=cancelled'},'cs-pro:checkout:'+r.operation);
