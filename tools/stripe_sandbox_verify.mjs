@@ -36,7 +36,7 @@ const server=createServer(async(req,res)=>{
   const parts=[];let size=0;for await(const p of req){size+=p.length;if(size>262144)throw Error('Payload limit');parts.push(p);}
   const result=await webhook(new Request('http://127.0.0.1:'+port+'/webhook',{method:'POST',headers:{'stripe-signature':req.headers['stripe-signature']||''},body:Buffer.concat(parts)}),env,engine.entitlement);
   receipt('signed-provider-webhook',{duplicate:!!result.duplicate});res.writeHead(200);res.end('ok');
- }catch(e){receipt('webhook-rejected',{code:e.code||'unknown'});res.writeHead(400);res.end('rejected');}
+ }catch(e){receipt('webhook-rejected',{code:e.code||'unknown'});res.writeHead(e.status||500);res.end('rejected');}
 });
 await new Promise((ok,no)=>{server.once('error',no);server.listen(port,'127.0.0.1',ok);});
 const events='checkout.session.completed,checkout.session.async_payment_succeeded,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed,charge.refunded,charge.dispute.created,radar.early_fraud_warning.created';
@@ -52,9 +52,12 @@ if(!output.includes('Ready!'))throw Error('Listener not ready');
 const observedSecret=output.match(/whsec_[A-Za-z0-9]+/)?.[0];
 if(observedSecret&&observedSecret!==env.STRIPE_CS_WEBHOOK_SECRET)throw Error('Listener signing identity mismatch');
 output='';receipt('listener-ready',{transport:'Stripe CLI loopback forwarding; production public webhook not tested'});
-const result=await checkout(env,owner,{acceptedTerms:TERMS,recurring:true,locale:'en'},engine.entitlement);
-writeFileSync(join(state,'provider-checkout.json'),JSON.stringify({owner,source,...result}),{mode:0o600});
-receipt('adapter-checkout-created',{entitled:(await billingStatus(env,owner,engine.entitlement)).entitled});
+const initial=await billingStatus(env,owner,engine.entitlement);if(!initial.ready)throw Error('Provider readiness required');
+if(['pending','not_subscribed'].includes(initial.state)&&!initial.riskHold){
+ const result=await checkout(env,owner,{acceptedTerms:TERMS,recurring:true,locale:'en'},engine.entitlement);
+ writeFileSync(join(state,'provider-checkout.json'),JSON.stringify({owner,source,...result}),{mode:0o600});
+ receipt('adapter-checkout-created',{entitled:(await billingStatus(env,owner,engine.entitlement)).entitled});
+}else receipt('existing-operation-resumed',{state:initial.state,entitled:initial.entitled,riskHold:initial.riskHold});
 let last='';const timer=setInterval(async()=>{
  try{const status=await billingStatus(env,owner,engine.entitlement),signature=JSON.stringify([status.state,status.entitled,status.riskHold,status.cancelAtPeriodEnd]);
   if(signature!==last){receipt('provider-subscription-readback',{state:status.state,entitled:status.entitled,riskHold:status.riskHold,cancelAtPeriodEnd:status.cancelAtPeriodEnd});last=signature;}

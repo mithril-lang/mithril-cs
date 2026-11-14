@@ -74,8 +74,12 @@ export async function reconcile(env,owner,entitlement){
  const invoiceId=typeof s.latest_invoice==='string'?s.latest_invoice:s.latest_invoice?.id;
  let paid=false;if(invoiceId){const inv=await stripe(env,'invoices/'+id(invoiceId,'in'));const sub=inv.subscription||inv.parent?.subscription_details?.subscription;
   if(inv.customer!==r.customer_id||sub!==s.id||inv.currency!=='usd')stop('billing_invoice_mismatch',503);paid=inv.status==='paid'&&inv.amount_remaining===0;}
- const end=items[0].current_period_end??s.current_period_end;if(!Number.isSafeInteger(end)||end<=0)stop('billing_provider_invalid',503);
- const committed=await q(env,'UPDATE cs_billing SET subscription_id=?,status=?,paid=?,period_end=?,cancel_at_period_end=?,verified_at=? WHERE owner=? AND customer_id=? AND verification_token=?',s.id,s.status,paid?1:0,end,s.cancel_at_period_end?1:0,Date.now(),owner,r.customer_id,fence).run();
+ const providerEnd=items[0].current_period_end??s.current_period_end;if(!Number.isSafeInteger(providerEnd)||providerEnd<=0)stop('billing_provider_invalid',503);
+ // Portal may schedule cancel_at at the item period end while leaving the
+ // legacy cancel_at_period_end flag false. Earlier scheduled ends also cap access.
+ const cancelAt=Number.isSafeInteger(s.cancel_at)&&s.cancel_at>0?s.cancel_at:null;
+ const end=cancelAt?Math.min(providerEnd,cancelAt):providerEnd,scheduled=s.cancel_at_period_end===true||cancelAt!==null;
+ const committed=await q(env,'UPDATE cs_billing SET subscription_id=?,status=?,paid=?,period_end=?,cancel_at_period_end=?,verified_at=? WHERE owner=? AND customer_id=? AND verification_token=?',s.id,s.status,paid?1:0,end,scheduled?1:0,Date.now(),owner,r.customer_id,fence).run();
  if(committed.meta.changes!==1)stop('billing_verification_superseded',503);
  r=await row(env,owner);if(r.verification_token!==fence)stop('billing_verification_superseded',503);return safe(r,entitlement({status:r.status,paid:r.paid===1,risk:!!r.risk_hold,period_end:r.period_end,now:Math.floor(Date.now()/1000)}));
 }
