@@ -181,7 +181,7 @@ def main():
     cmname = name + "-source"
     own = None
     lease_uid = None
-    measured={"samples":0,"min_free_bytes":2**63,"max_own_working_set_bytes":0,"min_available_plus_own_bytes":2**63,"max_cpu_nanocores":0}
+    measured={"samples":0,"min_free_bytes":2**63,"max_credited_owned_bytes":0,"min_available_plus_own_bytes":2**63,"max_cpu_nanocores":0}
     def fresh():
         current_nodes = complete(get("nodes"), "Node")
         need({n["metadata"]["name"]: n["metadata"]["uid"] for n in current_nodes} == roster, "node roster changed")
@@ -228,6 +228,12 @@ def main():
             done = any(c.get("type") in ["Complete", "Failed"] and c.get("status") == "True" for c in job.get("status", {}).get("conditions", []))
             need((done and not job["metadata"].get("deletionTimestamp") and not job.get("status", {}).get("active") and not job.get("status", {}).get("terminating")) or job["metadata"]["uid"] == own, "concurrent Job hold")
         summary = kube("get", "--raw", "/api/v1/nodes/" + args.node + "/proxy/stats/summary")
+        # A newly Running Pod can precede its first kubelet stats row.
+        # Wait only for read evidence; do not credit unobserved bytes or change floors.
+        observe_until=time.monotonic()+15
+        while args.edge_console and own_metric_uid and summary["node"]["memory"]["availableBytes"]<6*GIB and not any(p.get("podRef",{}).get("uid")==own_metric_uid for p in summary.get("pods",[])) and time.monotonic()<observe_until:
+            time.sleep(1)
+            summary=kube("get","--raw","/api/v1/nodes/"+args.node+"/proxy/stats/summary")
         s = summary["node"]
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
@@ -238,7 +244,7 @@ def main():
         if args.edge_console:
             measured["samples"]+=1
             measured["min_free_bytes"]=min(measured["min_free_bytes"],s["memory"]["availableBytes"])
-            measured["max_own_working_set_bytes"]=max(measured["max_own_working_set_bytes"],credit)
+            measured["max_credited_owned_bytes"]=max(measured["max_credited_owned_bytes"],credit)
             measured["min_available_plus_own_bytes"]=min(measured["min_available_plus_own_bytes"],s["memory"]["availableBytes"]+credit)
             measured["max_cpu_nanocores"]=max(measured["max_cpu_nanocores"],s["cpu"]["usageNanoCores"])
         need(s["cpu"]["usageNanoCores"] <= (1500000000 if own else 500000000), "CPU hold")
