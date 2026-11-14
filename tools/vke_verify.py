@@ -57,6 +57,8 @@ def owned_memory_credit(stats, pod_uid, now):
     memory=matches[0].get("memory",{})
     observed=datetime.datetime.fromisoformat(memory.get("time","").replace("Z","+00:00")).timestamp()
     need(-5<=now-observed<=30, "own Pod metrics stale; no memory credit")
+    node_time=datetime.datetime.fromisoformat(stats["node"]["memory"]["time"].replace("Z","+00:00")).timestamp()
+    need(abs(node_time-observed)<=5, "own/node metric timestamps differ; no memory credit")
     used=memory.get("workingSetBytes")
     need(type(used) is int and 0<=used<=GIB, "own Pod measured bytes exceed fixed1GiB limit")
     return used
@@ -181,7 +183,7 @@ def main():
     cmname = name + "-source"
     own = None
     lease_uid = None
-    measured={"samples":0,"min_free_bytes":2**63,"max_credited_owned_bytes":0,"min_available_plus_own_bytes":2**63,"max_cpu_nanocores":0}
+    measured={"resource_observation_waits":0,"samples":0,"min_free_bytes":2**63,"max_credited_owned_bytes":0,"min_available_plus_own_bytes":2**63,"max_cpu_nanocores":0}
     def fresh():
         current_nodes = complete(get("nodes"), "Node")
         need({n["metadata"]["name"]: n["metadata"]["uid"] for n in current_nodes} == roster, "node roster changed")
@@ -228,18 +230,33 @@ def main():
             done = any(c.get("type") in ["Complete", "Failed"] and c.get("status") == "True" for c in job.get("status", {}).get("conditions", []))
             need((done and not job["metadata"].get("deletionTimestamp") and not job.get("status", {}).get("active") and not job.get("status", {}).get("terminating")) or job["metadata"]["uid"] == own, "concurrent Job hold")
         summary = kube("get", "--raw", "/api/v1/nodes/" + args.node + "/proxy/stats/summary")
-        # A newly Running Pod can precede its first kubelet stats row.
-        # Wait only for read evidence; do not credit unobserved bytes or change floors.
+        required=(6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5))*GIB
         observe_until=time.monotonic()+15
-        while args.edge_console and own_metric_uid and summary["node"]["memory"]["availableBytes"]<6*GIB and not any(p.get("podRef",{}).get("uid")==own_metric_uid for p in summary.get("pods",[])) and time.monotonic()<observe_until:
+        credit=0
+        while True:
+            s=summary["node"]
+            reason=None
+            if args.edge_console and own_metric_uid and s["memory"]["availableBytes"]<required:
+                own_rows=[p for p in summary.get("pods",[]) if p.get("podRef",{}).get("uid")==own_metric_uid]
+                need(len(own_rows)<=1,"duplicate owned metrics; no memory credit")
+                try:
+                    credit=owned_memory_credit(summary,own_metric_uid,time.time())
+                except RuntimeError as error:
+                    need("exceed fixed" not in str(error),str(error))
+                    credit=0
+                    reason=str(error)
+            if s["memory"]["availableBytes"]+credit>=required:
+                break
+            if not args.edge_console or not own_metric_uid or time.monotonic()>=observe_until:
+                need(False,reason or "headroom hold")
+            # A hold waits for contemporaneous measurements, never grants credit
+            # to unobserved bytes and never starts additional work.
+            measured["resource_observation_waits"]+=1
             time.sleep(1)
             summary=kube("get","--raw","/api/v1/nodes/"+args.node+"/proxy/stats/summary")
-        s = summary["node"]
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
             need(-5 <= age <= 30, "stale metrics")
-        required=(6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5))*GIB
-        credit=owned_memory_credit(summary,own_metric_uid,time.time()) if args.edge_console and own_metric_uid and s["memory"]["availableBytes"]<required else 0
         need(s["memory"]["availableBytes"]+credit >= required and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
         if args.edge_console:
             measured["samples"]+=1

@@ -3,7 +3,7 @@ import datetime,unittest
 from vke_verify import owned_memory_credit,GIB
 class MemoryBudget(unittest.TestCase):
  def sample(self,uid="owned",used=123,age=0):
-  return {"pods":[{"podRef":{"uid":uid},"memory":{"workingSetBytes":used,"time":datetime.datetime.fromtimestamp(1000-age,datetime.timezone.utc).isoformat()}}]}
+  return {"node":{"memory":{"time":datetime.datetime.fromtimestamp(1000,datetime.timezone.utc).isoformat()}},"pods":[{"podRef":{"uid":uid},"memory":{"workingSetBytes":used,"time":datetime.datetime.fromtimestamp(1000-age,datetime.timezone.utc).isoformat()}}]}
  def test_no_credit_before_ownership(self):
   self.assertEqual(0,owned_memory_credit(self.sample(),None,1000))
  def test_exact_measured_bytes_only(self):
@@ -12,6 +12,8 @@ class MemoryBudget(unittest.TestCase):
   with self.assertRaises(RuntimeError):owned_memory_credit(self.sample("foreign"),"owned",1000)
  def test_stale_rejected(self):
   with self.assertRaises(RuntimeError):owned_memory_credit(self.sample(age=31),"owned",1000)
+ def test_asynchronous_timestamps_rejected(self):
+  with self.assertRaises(RuntimeError):owned_memory_credit(self.sample(age=9),"owned",1000)
  def test_over_fixed_limit_rejected(self):
   with self.assertRaises(RuntimeError):owned_memory_credit(self.sample(used=GIB+1),"owned",1000)
  def test_duplicate_uid_rejected(self):
