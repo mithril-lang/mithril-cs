@@ -124,7 +124,8 @@ export async function portal(env,owner,body={}){
  const config=await stripe(env,'billing_portal/configurations/'+id(env.STRIPE_CS_PORTAL_CONFIG,'bpc'));
  if(!config.active||config.metadata?.service!==SERVICE||config.features?.subscription_cancel?.enabled!==true||config.features?.subscription_cancel?.mode!=='at_period_end'||!config.features?.payment_method_update?.enabled||!config.features?.invoice_history?.enabled||config.features?.subscription_update?.enabled)stop('billing_portal_mismatch',503);
  const customer=await stripe(env,'customers/'+id(r.customer_id,'cus'));if(customer.metadata?.service!==SERVICE||customer.metadata?.owner!==await hash(owner))stop('billing_owner_mismatch',503);
- const s=await stripe(env,'billing_portal/sessions',{customer:r.customer_id,configuration:env.STRIPE_CS_PORTAL_CONFIG,return_url:ORIGIN+'/app/billing?lang='+(body.locale==='ja'?'ja':'en')});
+ const locale=body.locale==='ja'?'ja':'en';
+ const s=await stripe(env,'billing_portal/sessions',{customer:r.customer_id,configuration:env.STRIPE_CS_PORTAL_CONFIG,locale,return_url:ORIGIN+'/app/billing?lang='+locale});
  return {url:providerUrl(s.url,'billing.stripe.com')};
 }
 export async function verifySignature(raw,header,secret,now=Date.now()){

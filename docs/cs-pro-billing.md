@@ -131,12 +131,17 @@ After exact-source main/provider readback, enable live only when those gates
 and merchant/tax/fulfillment authority are confirmed. A real live charge must
 be performed by the account owner on the final Stripe payment screen.
 
-Observed2026-11-14: live CS credentials are not configured; available local
-CLI/key contexts belong to other merchants and must not be used. Tax settings
-are active but active registrations are empty. Delaware incorporation is not
-proof of sales-tax registration: Delaware's Division of Revenue states it has
-no state/local sales tax and separately describes gross-receipts tax. Do not
-create a fictional Delaware sales-tax registration or infer other jurisdictions.
+Observed2026-11-14: Jun approved a dedicated restricted live runtime key.
+Its Private 1Password custody and unpublished Cloudflare version were read
+back; production traffic is unchanged. Required merchant/product/price/portal
+reads succeeded and Balance access was denied. Never use the unrelated
+Gftd Japan key or AWAI CLI identity for this merchant. Tax settings are active
+but active registrations are empty. Jun confirmed Delaware is incorporation
+only and there are no other acquired tax registrations. Delaware's Division
+of Revenue states it has no state/local sales tax and separately describes
+gross-receipts tax. Do not create a fictional sales-tax registration or infer
+other jurisdictions or registration obligations. Applicable live tax conditions
+remain an owner decision before acquisition is enabled.
 
 Evidence/remaining decisions: MITHRIL-2517. Full managed-engine and organization
 service acceptance remain with their existing owners. No live subscription,
