@@ -8,3 +8,6 @@
 .env*
 /reports/
 /runs/
+
+# Generated edge artifact; only qualified private custody and Worker deployment.
+edge/engine.mjs

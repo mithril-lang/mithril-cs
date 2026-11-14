@@ -46,6 +46,23 @@ def terminal(pod):
                 return False
     return True
 
+def owned_memory_credit(stats, pod_uid, now):
+    """Credit only measured bytes already consumed by this exact active Pod.
+    Initial admission still requires the unchanged6GiB budget. The4GiB foreign
+    reservation and1GiB unused headroom remain reserved throughout execution.
+    """
+    if pod_uid is None: return 0
+    matches=[p for p in stats.get("pods",[]) if p.get("podRef",{}).get("uid")==pod_uid]
+    need(len(matches)==1, "own Pod metrics missing/duplicate; no memory credit")
+    memory=matches[0].get("memory",{})
+    observed=datetime.datetime.fromisoformat(memory.get("time","").replace("Z","+00:00")).timestamp()
+    need(-5<=now-observed<=30, "own Pod metrics stale; no memory credit")
+    node_time=datetime.datetime.fromisoformat(stats["node"]["memory"]["time"].replace("Z","+00:00")).timestamp()
+    need(abs(node_time-observed)<=5, "own/node metric timestamps differ; no memory credit")
+    used=memory.get("workingSetBytes")
+    need(type(used) is int and 0<=used<=GIB, "own Pod measured bytes exceed fixed1GiB limit")
+    return used
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--kubeconfig", required=True)
@@ -53,6 +70,7 @@ def main():
     p.add_argument("--node", required=True)
     p.add_argument("--node-uid", required=True)
     p.add_argument("--baseline", required=True, help="existing owner-reviewed CI platform policy JSON")
+    p.add_argument("--edge-console", action="store_true", help="Compile portable edge policy and run authenticated console adapter tests")
     p.add_argument("--review-2487", action="store_true", help="Bounded company replay and candidate context evidence")
     p.add_argument("--zap", action="store_true", help="Standalone Mithril scanner full tests and passive HTTP dogfood")
     p.add_argument("--all-runtimes", action="store_true", help="Run JVM, compiled CLJS/Node and BB with pinned toolchain inputs")
@@ -60,6 +78,7 @@ def main():
     p.add_argument("--additional-slot", action="store_true", help="Preserve exact legacy unknown reservation (4GiB/2CPU); add bounded CS slot")
     args = p.parse_args()
     if args.review_2487: args.zap = True
+    if args.edge_console: args.all_runtimes = True
     image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9" if args.python_contracts else BB
     if args.zap: image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9"
     need(sum([args.zap,args.all_runtimes,args.python_contracts])<=1,"choose one recipe")
@@ -164,6 +183,7 @@ def main():
     cmname = name + "-source"
     own = None
     lease_uid = None
+    measured={"resource_observation_waits":0,"samples":0,"min_free_bytes":2**63,"max_credited_owned_bytes":0,"min_available_plus_own_bytes":2**63,"max_cpu_nanocores":0}
     def fresh():
         current_nodes = complete(get("nodes"), "Node")
         need({n["metadata"]["name"]: n["metadata"]["uid"] for n in current_nodes} == roster, "node roster changed")
@@ -175,6 +195,7 @@ def main():
         js = complete(get("jobs", "-A"), "Job")
         seen = set()
         reserved_seen = False
+        own_metric_uid = None
         for pod in ps:
             spec = pod["spec"]
             if spec.get("nodeName") and spec["nodeName"] != args.node: continue
@@ -189,6 +210,12 @@ def main():
                 need(all(s.get("ready") for s in pod["status"]["containerStatuses"]), "platform readiness")
                 seen.add(uid); continue
             need(own is not None and any(o.get("uid") == own for o in pod["metadata"].get("ownerReferences", [])), "concurrent workload hold")
+            if args.edge_console and spec.get("nodeName")==args.node and pod.get("status",{}).get("phase")=="Running":
+                need(own_metric_uid is None and not spec.get("ephemeralContainers")
+                     and len(spec.get("containers",[]))==1
+                     and spec["containers"][0].get("resources",{}).get("limits",{}).get("memory")=="1Gi",
+                     "own Pod credit boundary changed")
+                own_metric_uid=uid
         need(seen == set(platform), "platform disappeared")
         if args.additional_slot: need(reserved_seen, "legacy reservation missing; requalify instead of clearing hold")
         for job in js:
@@ -202,11 +229,41 @@ def main():
             if any(node["metadata"]["labels"].get(x) != v for x, v in spec.get("nodeSelector", {}).items()): continue
             done = any(c.get("type") in ["Complete", "Failed"] and c.get("status") == "True" for c in job.get("status", {}).get("conditions", []))
             need((done and not job["metadata"].get("deletionTimestamp") and not job.get("status", {}).get("active") and not job.get("status", {}).get("terminating")) or job["metadata"]["uid"] == own, "concurrent Job hold")
-        s = kube("get", "--raw", "/api/v1/nodes/" + args.node + "/proxy/stats/summary")["node"]
+        summary = kube("get", "--raw", "/api/v1/nodes/" + args.node + "/proxy/stats/summary")
+        required=(6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5))*GIB
+        observe_until=time.monotonic()+15
+        credit=0
+        while True:
+            s=summary["node"]
+            reason=None
+            if args.edge_console and own_metric_uid and s["memory"]["availableBytes"]<required:
+                own_rows=[p for p in summary.get("pods",[]) if p.get("podRef",{}).get("uid")==own_metric_uid]
+                need(len(own_rows)<=1,"duplicate owned metrics; no memory credit")
+                try:
+                    credit=owned_memory_credit(summary,own_metric_uid,time.time())
+                except RuntimeError as error:
+                    need("exceed fixed" not in str(error),str(error))
+                    credit=0
+                    reason=str(error)
+            if s["memory"]["availableBytes"]+credit>=required:
+                break
+            if not args.edge_console or not own_metric_uid or time.monotonic()>=observe_until:
+                need(False,reason or "headroom hold")
+            # A hold waits for contemporaneous measurements, never grants credit
+            # to unobserved bytes and never starts additional work.
+            measured["resource_observation_waits"]+=1
+            time.sleep(1)
+            summary=kube("get","--raw","/api/v1/nodes/"+args.node+"/proxy/stats/summary")
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
             need(-5 <= age <= 30, "stale metrics")
-        need(s["memory"]["availableBytes"] >= (6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5)) * GIB and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
+        need(s["memory"]["availableBytes"]+credit >= required and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
+        if args.edge_console:
+            measured["samples"]+=1
+            measured["min_free_bytes"]=min(measured["min_free_bytes"],s["memory"]["availableBytes"])
+            measured["max_credited_owned_bytes"]=max(measured["max_credited_owned_bytes"],credit)
+            measured["min_available_plus_own_bytes"]=min(measured["min_available_plus_own_bytes"],s["memory"]["availableBytes"]+credit)
+            measured["max_cpu_nanocores"]=max(measured["max_cpu_nanocores"],s["cpu"]["usageNanoCores"])
         need(s["cpu"]["usageNanoCores"] <= (1500000000 if own else 500000000), "CPU hold")
         if lease_uid:
             lease = get("lease", LEASE, "-n", LNS)
@@ -258,7 +315,7 @@ def main():
         prior=get("networkpolicy","mcs-maven-egress","-n",NS,absent=True)
         if prior is None:create(policy)
         else: need(prior["spec"]==policy["spec"],"Maven policy addresses changed; requalify")
-    ledger = {"operation":operation,"issue":"MITHRIL-2487" if args.review_2487 else ("MITHRIL-2485" if args.zap else "MITHRIL-2471"),"source":args.source,"phase":"pre-submit","job":name,"image":image,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
+    ledger = {"operation":operation,"issue":"MITHRIL-2206" if args.edge_console else ("MITHRIL-2487" if args.review_2487 else ("MITHRIL-2485" if args.zap else "MITHRIL-2471")),"source":args.source,"phase":"pre-submit","job":name,"image":image,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
     journal = {"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name+"-journal","namespace":NS},"data":{"state":json.dumps(ledger)}}
     create(journal)
     lease = create({"apiVersion":"coordination.k8s.io/v1","kind":"Lease","metadata":{"name":LEASE,"namespace":LNS,"annotations":{"mithril.fund/owner_issue":"MITHRIL-2471","mithril.fund/source":args.source}},"spec":{"holderIdentity":operation,"leaseDurationSeconds":900,"acquireTime":datetime.datetime.now(datetime.timezone.utc).isoformat()}})
@@ -307,6 +364,14 @@ bb cs review test/fixtures/demo --authorized
 bb cs pentest-fixture --authorized
 if timeout 3 bash -c 'exec 3<>/dev/tcp/10.96.0.1/443'; then echo PRIVATE_API_EGRESS_DENY_FAILED; exit 1; fi
 echo ALL_RUNTIMES_PASS
+"""
+    if args.edge_console:
+        script=script.replace("-Xmx640m -Duser.home=/tmp", "-Xmx448m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Duser.home=/tmp")
+        script += r"""
+clojure -M:edge-build
+cp /tmp/mithril-edge-engine.mjs edge/engine.mjs
+node --test edge/worker.test.mjs
+node -e 'const fs=require("fs"),crypto=require("crypto");const b=fs.readFileSync("/tmp/mithril-edge-engine.mjs");if(b.length>200000)throw Error("compiled engine bound");console.log("EDGE_ENGINE_META "+JSON.stringify({bytes:b.length,sha256:crypto.createHash("sha256").update(b).digest("hex")}));console.log("EDGE_ENGINE_ARTIFACT "+b.toString("base64"));console.log("EDGE_CONSOLE_PASS");'
 """
     if args.zap:
         peers=sorted({r[4][0] for r in socket.getaddrinfo("mithril.fund",443,socket.AF_INET,socket.SOCK_STREAM)})
@@ -382,7 +447,7 @@ echo ALL_RUNTIMES_PASS
             success=any(c.get("type")=="Complete" and c.get("status")=="True" for c in conditions) and all(s.get("restartCount")==0 and s["state"]["terminated"]["exitCode"]==0 for s in statuses)
             ledger.update(phase="terminal",success=success,pod_uid=pod["metadata"]["uid"],log_sha256=hashlib.sha256(logs.stdout.encode()).hexdigest(),
                           zap_result=next((json.loads(line[len("ZAP_CI_RESULT "):]) for line in logs.stdout.splitlines() if line.startswith("ZAP_CI_RESULT ")),None),
-                          image=image,source_tree=commit["tree"]["sha"],source_manifest_sha256=digest(manifest))
+                          image=image,source_tree=commit["tree"]["sha"],source_manifest_sha256=digest(manifest),edge_resource_windows=measured if args.edge_console else None)
             # Bounded logs remain in the retained Pod. Only metadata enters journal.
             old=get("ConfigMap",name+"-journal","-n",NS)
             old["data"]["state"]=json.dumps(ledger)
@@ -392,7 +457,7 @@ echo ALL_RUNTIMES_PASS
             kube("delete","--raw","/apis/coordination.k8s.io/v1/namespaces/"+LNS+"/leases/"+LEASE,"-f","-",body={"apiVersion":"v1","kind":"DeleteOptions","preconditions":{"uid":lease_uid,"resourceVersion":current["metadata"]["resourceVersion"]}})
             need(get("lease",LEASE,"-n",LNS,absent=True) is None, "release unknown")
             print(json.dumps(ledger),flush=True)
-            print("\n".join(l for l in logs.stdout.splitlines() if l.startswith(("Testing ","Ran ","0 failures","FAIL","ERROR","expected:","  actual:","TINI_","ALL_","OK","test_","PRIVATE_","ZAP_","REVIEW_SUMMARY","REVIEW_PASS","PYTHON_","CWE matrix","clojure","ClojureScript"))),flush=True)
+            print("\n".join(l for l in logs.stdout.splitlines() if l.startswith(("Testing ","Ran ","0 failures","FAIL","ERROR","expected:","  actual:","TINI_","ALL_","OK","test_","PRIVATE_","ZAP_","REVIEW_SUMMARY","REVIEW_PASS","PYTHON_","CWE matrix","clojure","ClojureScript","EDGE_ENGINE_META","EDGE_CONSOLE_PASS","TAP version","# tests","# pass","# fail","not ok","ok "))),flush=True)
             raise SystemExit(0 if success else 1)
         time.sleep(3)
     raise RuntimeError("deadline unknown; retain source/journal/lease for reconciliation")
