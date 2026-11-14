@@ -1,5 +1,6 @@
+import {billingClient} from "./billing-ui.mjs";
 import {workspaceClient} from "./workspaces.mjs";
-export const client=workspaceClient+String.raw`
+export const client=billingClient+workspaceClient+String.raw`
 const ja=document.documentElement.lang==="ja",tr=(en,jp)=>ja?jp:en;
 const $=(s,r=document)=>r.querySelector(s),esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const site=$(".cs-site"),theme=$("#theme");

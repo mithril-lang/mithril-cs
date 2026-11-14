@@ -17,6 +17,9 @@
                    "approved" #{"exported" "rejected"}
                    "exported" #{"exported"}}
                  from #{}) to))
+(defn entitled? [{:keys [status paid risk period_end now]}]
+  (boolean (and (= status "active") (true? paid) (false? risk)
+                (integer? period_end) (integer? now) (> period_end now))))
 (defn assess [{:keys [url status headers body-complete]}]
   (let [ctype (str/lower-case (str (get headers "content-type" "")))
         document? (boolean (re-find #"^(text/html|application/xhtml\+xml)(;|$)" ctype))
@@ -52,5 +55,6 @@
                                  :headers (get v "headers") :body-complete (get v "body-complete")}]
                       (clj->js (assess input))))
           :reviewText (fn [text] (clj->js (source-rules/review-text text)))
+          :entitlement (fn [value] (entitled? (js->clj value :keywordize-keys true)))
           :transition (fn [from to] (allowed-transition? from to))
           :limits (clj->js limits)}))

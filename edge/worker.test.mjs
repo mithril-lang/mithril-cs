@@ -8,6 +8,7 @@ import vm from "node:vm";
 import {client} from "./ui.mjs";
 import './github.test.mjs';
 import './workspaces.test.mjs';
+import './billing.test.mjs';
 new vm.Script(client,{filename:"browser-client.js"});
 const ORIGIN="https://cs.mithril.fund",A="a".repeat(32),B="b".repeat(32);
 const schema=readFileSync(new URL("./schema.sql",import.meta.url),"utf8");
