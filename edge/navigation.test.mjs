@@ -4,16 +4,17 @@ import vm from 'node:vm';
 import {client,page} from './ui.mjs';
 const pause=()=>new Promise(r=>setImmediate(r));
 async function until(fn){for(let i=0;i<50;i++){if(fn())return;await pause();}assert.fail('Client state did not settle');}
-function fixture(){
- const events={},docEvents={},nodes={},calls=[],posts=[];let actor='alice',delay=false;const held=[];
+function fixture(initialActor='alice'){
+ const events={},docEvents={},nodes={},calls=[],posts=[],intervals=[];let actor=initialActor,delay=false,failed=false;const held=[];
  const location=new URL('https://cs.mithril.fund/app/reviews?lang=en');location.assign=()=>{};location.reload=()=>{};
  function node(){return {innerHTML:'',dataset:{},hidden:true,open:false,setAttribute(){},removeAttribute(){},addEventListener(){},querySelector(s){return s==='summary'?node():null;},querySelectorAll(){return [];},focus(){},contains(){return false;}};}
  const root=node(),records=node(),account=node();root.querySelector=s=>s==='#records'?records:s==='h1'||s==='#sign-in'||s==='#retry-load'?node():null;
- for(const key of ['.cs-site','#theme','#locale','#sign-out'])nodes[key]=node();Object.assign(nodes,{'#workspace':root,'#account-menu':account,'#records':records,'#retry-load':node(),'#sign-in':node()});
+ for(const key of ['.cs-site','#theme','#locale','#sign-out','#login-status'])nodes[key]=node();Object.assign(nodes,{'#workspace':root,'#account-menu':account,'#records':records,'#retry-load':node(),'#sign-in':node()});
  const document={documentElement:{lang:'en',style:{}},querySelector:s=>nodes[s]||null,querySelectorAll:()=>[],addEventListener:(n,f)=>(docEvents[n]??=[]).push(f),activeElement:null};
- const window={addEventListener:(n,f)=>(events[n]??=[]).push(f)};
- const context={document,window,location,history:{pushState(_s,_t,url){location.href=new URL(url,location).href;}},localStorage:{getItem(){return null;},setItem(){}},matchMedia:()=>({matches:true}),URL,Response,console,crypto:globalThis.crypto,setInterval:()=>1,clearInterval(){},setTimeout,clearTimeout,BroadcastChannel:class{constructor(){context.channel=this;}postMessage(v){posts.push(v);}}};
+ const window={open:()=>null,addEventListener:(n,f)=>(events[n]??=[]).push(f)};
+ const context={document,window,location,history:{pushState(_s,_t,url){location.href=new URL(url,location).href;}},localStorage:{getItem(){return null;},setItem(){}},matchMedia:()=>({matches:true}),URL,Response,console,crypto:globalThis.crypto,setInterval:fn=>(intervals.push(fn),intervals.length),clearInterval(){},setTimeout,clearTimeout,BroadcastChannel:class{constructor(){context.channel=this;}postMessage(v){posts.push(v);}}};
  context.fetch=async(path)=>{calls.push(path);const owner=actor;if(delay&&!path.endsWith('session'))await new Promise(r=>held.push(r));if(owner==='signed-out')return Response.json({error:{code:'sign_in_required'}},{status:401});let value;
+  if(failed&&!path.endsWith('/session'))return Response.json({error:{code:'temporarily_unavailable'}},{status:503});
   if(path.endsWith('/session'))value={scope:owner,csrf:'fixture',capabilities:{publicReviewRepositories:['mithril-lang/mithril-cs']}};
   else if(path.endsWith('/infrastructure'))value={source:'a'.repeat(40),resources:[]};
   else {const name=path.split('/').pop();value={[name]:[]};}
@@ -21,7 +22,7 @@ function fixture(){
  };
  vm.runInNewContext(client,context);
  function click(path,extra={}){let prevented=false;const a={href:new URL(path,location).href,target:'',hasAttribute:()=>false};const event={button:0,target:{closest:()=>a},preventDefault(){prevented=true;},...extra};for(const fn of docEvents.click||[])fn(event);return prevented;}
- return {root,records,account,calls,posts,context,location,click,events,actor(v){actor=v;},hold(){delay=true;},release(){delay=false;held.splice(0).forEach(f=>f());},ready:()=>!account.hidden};
+ return {root,records,account,calls,posts,context,location,click,events,intervals,fail(v){failed=v;},actor(v){actor=v;},hold(){delay=true;},release(){delay=false;held.splice(0).forEach(f=>f());},ready:()=>!account.hidden};
 }
 test('workspace navigation keeps one shell and validates data without repeating session bootstrap',async()=>{
  const f=fixture();await until(f.ready);assert.equal(f.calls.filter(x=>x==='/api/session').length,1);assert.equal(f.click('/app/coverage?lang=en'),true);await until(()=>f.root.innerHTML.includes('Continuous coverage')&&!f.root.innerHTML.includes('cs-loading'));
@@ -40,4 +41,18 @@ test('modified, foreign-locale and unknown-route links retain native browser nav
 });
 test('cross-tab logout immediately removes records and hides the shared account menu',async()=>{
  const f=fixture();await until(f.ready);f.context.channel.onmessage({data:'signed-out'});assert.equal(f.account.hidden,true);assert.match(f.root.innerHTML,/Sign in to Mithril CS/);assert.doesNotMatch(f.root.innerHTML,/id="records"/);
+});
+test('local Retry restores the loading state and recovers without reloading the shell',async()=>{
+ const f=fixture();await until(f.ready);f.fail(true);f.click('/app/coverage?lang=en');await until(()=>f.root.innerHTML.includes('id="retry-load"'));
+ assert.doesNotMatch(f.root.innerHTML,/Refresh|Checking your session/);assert.equal(f.account.hidden,false);
+ f.fail(false);f.hold();f.context.document.querySelector('#retry-load').onclick();assert.match(f.root.innerHTML,/cs-loading/);
+ f.release();await until(()=>f.root.innerHTML.includes('Continuous coverage')&&!f.root.innerHTML.includes('cs-loading'));
+ assert.doesNotMatch(f.root.innerHTML,/id="retry-load"/);assert.equal(f.calls.filter(x=>x==='/api/session').length,1);
+});
+test('unauthenticated sign-in polling retains waiting and popup fallback guidance',async()=>{
+ const f=fixture('signed-out');await until(()=>f.root.innerHTML.includes('Sign in to Mithril CS'));
+ f.context.document.querySelector('#sign-in').onclick();const status=f.context.document.querySelector('#login-status');
+ const fallback=status.innerHTML;assert.match(fallback,/Open sign in/);
+ const poll=f.intervals.at(-1);await poll();assert.equal(status.innerHTML,fallback);assert.equal(f.account.hidden,true);
+ f.actor('alice');await poll();assert.equal(f.account.hidden,false);assert.match(f.root.innerHTML,/id="records"/);
 });

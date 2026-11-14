@@ -21,7 +21,7 @@ if(root){
  const date=x=>x?new Date(x).toLocaleString():tr("Not recorded","記録なし");
  const names={targets:tr("Targets","検査対象"),runs:tr("Run history","実行履歴"),findings:tr("Findings","検出結果"),fixes:"Auto-Fix",pentesting:tr("Autonomous pentesting","自律ペンテスト"),reviews:tr("Pull request review","PRレビュー"),coverage:tr("Continuous coverage","継続監視"),infrastructure:tr("Infrastructure","インフラ"),reports:tr("Security report","セキュリティレポート"),risk:tr("Findings and risk","検出結果とリスク")};
  const errors={
-  github_snapshot_unavailable:tr("No recent verified public-source snapshot is available. Refresh the source through the repository integration before retrying.","新しい検証済み公開ソースのスナップショットがありません。リポジトリ連携でソースを更新後、再試行してください。"),
+  github_snapshot_unavailable:tr("No recent verified public-source snapshot is available. Update the source through the repository integration before retrying.","新しい検証済み公開ソースのスナップショットがありません。リポジトリ連携でソースを更新後、再試行してください。"),
   github_source_changed:tr("The PR changed during review. Retry to review the current source.","レビュー中にPRが更新されました。最新のソースで再試行してください。"),
   github_rate_limited:tr("GitHub rate-limited this read. Wait before retrying; no result was saved.","GitHubの取得上限に達しました。時間をおいて再試行してください。結果は保存されていません。"),
   github_unavailable:tr("The public PR could not be read. Check the repository and PR number.","公開PRを取得できませんでした。リポジトリとPR番号を確認してください。"),
@@ -33,12 +33,12 @@ if(root){
   stale_fix:tr("The target scope changed. Run a new review and generate a new proposal.","対象の範囲が変更されました。再検査して新しい修正案を作成してください。"),
   stale_finding:tr("The target scope changed. Run a new review first.","対象の範囲が変更されました。先に再検査してください。"),
   run_already_active:tr("This target already has an active run. Open Run history.","この対象は実行中です。実行履歴を確認してください。"),
-  csrf_denied:tr("Your session changed. Refresh before trying again.","セッションが変更されました。再読み込みしてください。"),
+  csrf_denied:tr("Your session changed. Sign in again before continuing.","セッションが変更されました。もう一度ログインしてください。"),
   daily_run_limit:tr("The pilot limit is 20 runs per account per day.","パイロットの上限は1アカウントあたり1日20回です。"),
   target_limit:tr("The pilot limit is 20 targets per workspace.","パイロットの上限はワークスペースあたり20対象です。"),
   unqualified_destination:tr("This network destination is not enabled for the current pilot.","このネットワーク宛先は現在のパイロットで実行できません。"),
-  finding_changed:tr("This finding was updated. Refresh and review the current version.","この検出結果は更新されています。最新の状態を確認してください。"),
-  fix_state_changed:tr("The proposal state changed. Refresh before reviewing.","修正案の状態が変更されています。再読み込みしてください。")
+  finding_changed:tr("This finding was updated. Open it again to review the current version.","この検出結果は更新されています。最新の状態を確認してください。"),
+  fix_state_changed:tr("The proposal state changed. Open it again before reviewing.","修正案の状態が変更されています。開き直して確認してください。")
  };
  const message=e=>errors[e.code]||tr("The operation could not be completed. Please try again. Code: ","操作を完了できませんでした。状態を確認して再試行してください。コード：")+e.code;
  async function call(path,body){
@@ -46,7 +46,7 @@ if(root){
   if(requestEpoch!==epoch)throw {code:"request_superseded"};
   let data;try{data=await r.json();}catch{throw {code:"invalid_response"};}
   if(requestEpoch!==epoch)throw {code:"request_superseded"};
-  if(!r.ok){if(r.status===401){invalidate();}throw {code:data.error?.code||"request_failed"};}
+  if(!r.ok){if(r.status===401&&session){invalidate();}throw {code:data.error?.code||"request_failed"};}
   const scope=r.headers.get("x-mithril-scope");
   if(path==="session"){if(!scope||scope!==data.scope)throw {code:"session_changed"};}
   else if(session&&scope!==session.scope){invalidate();throw {code:"session_changed"};}
@@ -73,7 +73,7 @@ if(root){
    if(version!==epoch)return;state={targets:values[0].targets,runs:values[1].runs,findings:values[2].findings,fixes:values[3].fixes,reviews:values[4].reviews,infrastructure:values[5]};
    render();if(account)account.hidden=false;
    if(focusView){const heading=$("h1",root);if(heading){heading.tabIndex=-1;heading.focus();}focusView=false;}
-  }catch(e){if(version!==epoch)return;if(e.code==="sign_in_required")login();else{root.removeAttribute("aria-busy");root.innerHTML='<h1>'+esc(names[tab]||names.targets)+'</h1><p class="error" role="alert">'+esc(message(e))+'</p><button id="retry-load">'+tr("Retry","再試行")+"</button>";$("#retry-load").onclick=load;}}
+  }catch(e){if(version!==epoch)return;if(e.code==="sign_in_required")login();else{root.removeAttribute("aria-busy");root.innerHTML='<h1>'+esc(names[tab]||names.targets)+'</h1><p class="error" role="alert">'+esc(message(e))+'</p><button id="retry-load">'+tr("Retry","再試行")+"</button>";$("#retry-load").onclick=()=>{loading();focusView=true;load();};}}
   finally{if(version===epoch)busy=false;}
  }
  function loading(){

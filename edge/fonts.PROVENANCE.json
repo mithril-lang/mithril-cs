@@ -1,0 +1,29 @@
+{
+  "license": "SIL Open Font License 1.1",
+  "scope": "Latin UI and code; locale glyphs retain system fallback. No third-party runtime font requests.",
+  "fonts": [
+    {
+      "name": "noto-sans-latin",
+      "path": "/fonts/noto-sans-latin-51ca196f49a3.woff2",
+      "sha256": "51ca196f49a33e79e7870ff88ebd2829a3f627a51e7d690986618f0e7ad2b52d",
+      "bytes": 35820,
+      "source": {
+        "repository": "mithril-lang/mithril-fund",
+        "revision": "0450accefa8da3f6ad3f272b2f19b7521d7b4ef4",
+        "path": "packages/design-system/resources/fonts/noto-sans/noto-sans-latin-wght-normal.woff2"
+      }
+    },
+    {
+      "name": "roboto-mono-latin",
+      "path": "/fonts/roboto-mono-latin-c49e5f206c0b.woff2",
+      "sha256": "c49e5f206c0ba05fab722703bcfc6c83d517b15cb50dd56b5ce4e4d9fafa49a4",
+      "bytes": 12684,
+      "source": {
+        "url": "https://fonts.gstatic.com/s/robotomono/v31/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW4AJi8SJQt.woff2",
+        "licenseRepository": "google/fonts",
+        "licenseRevision": "29b4ec6df2522a8aee279414b78a07910b065874",
+        "licensePath": "ofl/robotomono/OFL.txt"
+      }
+    }
+  ]
+}
