@@ -355,6 +355,7 @@ echo TINI_FIXTURE_PASS
         script = script[:script.index("cd /tmp/source")] + r"""
 cd /tmp/source
 python -I -B tools/router_recover.py --selftest
+python -B tools/test_edge_admission.py
 """
     if args.all_runtimes:
         script = script[:script.index("cd /tmp/source")] + r"""
@@ -376,7 +377,6 @@ echo ALL_RUNTIMES_PASS
 clojure -M:edge-build
 cp /tmp/mithril-edge-engine.mjs edge/engine.mjs
 node --test edge/worker.test.mjs
-python -B tools/test_edge_admission.py
 node -e 'const fs=require("fs"),crypto=require("crypto");const b=fs.readFileSync("/tmp/mithril-edge-engine.mjs");if(b.length>200000)throw Error("compiled engine bound");console.log("EDGE_ENGINE_META "+JSON.stringify({bytes:b.length,sha256:crypto.createHash("sha256").update(b).digest("hex")}));console.log("EDGE_ENGINE_ARTIFACT "+b.toString("base64"));console.log("EDGE_CONSOLE_PASS");'
 """
     if args.zap:
