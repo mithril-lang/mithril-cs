@@ -5,6 +5,17 @@ Kotoba Labs, Inc., `acct_1U7sRyITDawH5x8a`. Price: USD29 per month for one
 authenticated personal seat. No trial, coupon, overage or quantity change.
 Existing free-pilot permissions and engine/target limits are preserved.
 
+Provisioned live Product: `mithril_cs_pro_v1`; monthly Price:
+`price_1Ubey0ITDawH5x8a3YgpaG7t`; Portal configuration:
+`bpc_1Ubf06ITDawH5x8a61JGTcye`. Product tax code `txcd_10103001`
+(business SaaS) was explicitly confirmed by Jun. These objects alone do not
+enable acquisition or establish payment acceptance.
+
+Dedicated development Sandbox: `acct_1Ubf2TIJVnMCo3dC`,
+`Mithril CS Development`, created without copying production data. The core
+adapter pins this account in isolated test mode; the production entrypoint
+continues to reject all test-mode requests.
+
 Design: Figma file `N42vvZ2M7tgH2IkGXUUOWP`, section `1057:46215`.
 Sixteen desktop states cover Grid/Porcelain, with two mobile examples. Card
 entry belongs to hosted Stripe Checkout; card data never reaches this Worker.

@@ -1,6 +1,8 @@
 // Fixed merchant/SKU adapter. Provider credentials never enter browser state.
 export const TERMS='cs-pro-20261114-v1';
 export const MERCHANT='acct_1U7sRyITDawH5x8a';
+// Dedicated Kotoba Labs sandbox; never selected by the production entrypoint.
+export const TEST_MERCHANT='acct_1Ubf2TIJVnMCo3dC';
 export const SERVICE='mithril-cs-pro-v1';
 const ORIGIN='https://cs.mithril.fund';
 export class BillingError extends Error {constructor(status,code){super(code);this.status=status;this.code=code;}}
@@ -41,10 +43,13 @@ async function list(env,path,query){
 }
 export async function readiness(env){
  if(!configured(env))return false;
- const account=await stripe(env,'account');if(account.id!==MERCHANT||account.charges_enabled!==true)stop('billing_merchant_mismatch',503);
+ const account=await stripe(env,'account');if(account.id!==(mode(env)?MERCHANT:TEST_MERCHANT)||account.charges_enabled!==true)stop('billing_merchant_mismatch',503);
  const price=await stripe(env,'prices/'+id(env.STRIPE_CS_PRICE,'price'));
  if(!price.active||price.currency!=='usd'||price.unit_amount!==2900||price.recurring?.interval!=='month'||price.recurring?.interval_count!==1||price.recurring?.usage_type!=='licensed')stop('billing_price_mismatch',503);
- const product=await stripe(env,'products/'+id(typeof price.product==='string'?price.product:price.product?.id,'prod'));
+ const productId=typeof price.product==='string'?price.product:price.product?.id;
+ // Stripe also allows merchant-defined Product IDs. Accept only our exact
+ // provisioned custom ID in addition to standard prod_ IDs, never a URL/path.
+ const product=await stripe(env,'products/'+(productId==='mithril_cs_pro_v1'?productId:id(productId,'prod')));
  if(product.metadata?.service!==SERVICE||!product.active||!product.tax_code)stop('billing_product_mismatch',503);
  const registrations=await list(env,'tax/registrations',{status:'active',limit:100});if(!registrations.length)stop('billing_tax_setup_pending',503);
  return true;
