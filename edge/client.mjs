@@ -40,7 +40,7 @@ if(root){
   finding_changed:tr("This finding was updated. Refresh and review the current version.","この検出結果は更新されています。最新の状態を確認してください。"),
   fix_state_changed:tr("The proposal state changed. Refresh before reviewing.","修正案の状態が変更されています。再読み込みしてください。")
  };
- const message=e=>errors[e.code]||tr("The operation could not be completed. Refresh and retry. Code: ","操作を完了できませんでした。状態を確認して再試行してください。コード：")+e.code;
+ const message=e=>errors[e.code]||tr("The operation could not be completed. Please try again. Code: ","操作を完了できませんでした。状態を確認して再試行してください。コード：")+e.code;
  async function call(path,body){
   const requestEpoch=epoch,write=body!==undefined,r=await fetch("/api/"+path,{method:write?"POST":"GET",credentials:"same-origin",cache:"no-store",headers:write?{"content-type":"application/json","x-csrf-token":session?.csrf||""}:{},body:write?JSON.stringify(body):undefined});
   if(requestEpoch!==epoch)throw {code:"request_superseded"};
