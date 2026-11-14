@@ -22,3 +22,10 @@
   (is (edge/allowed-transition? "running" "partial"))
   (doseq [pair [["cancelled" "partial"] ["failed" "running"] ["rejected" "approved"] ["running" "complete"]]]
     (is (not (apply edge/allowed-transition? pair)))))
+(deftest paid-entitlement-is-explicit-and-time-bound
+  (let [valid {:status "active" :paid true :risk false :period_end 200 :now 100}]
+    (is (edge/entitled? valid))
+    (doseq [status ["pending" "past_due" "canceled" "trialing" "unpaid"]]
+      (is (not (edge/entitled? (assoc valid :status status)))))
+    (doseq [[k v] [[:paid false] [:paid 1] [:risk true] [:risk nil] [:period_end 100] [:period_end nil] [:now nil]]]
+      (is (not (edge/entitled? (assoc valid k v)))))))

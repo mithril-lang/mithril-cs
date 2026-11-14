@@ -35,3 +35,18 @@ CREATE TABLE IF NOT EXISTS cs_reviews (
  UNIQUE(owner,project,repository,pull_number,head_sha)
 );
 CREATE INDEX IF NOT EXISTS cs_reviews_owner ON cs_reviews(owner,project,created_at DESC);
+CREATE TABLE IF NOT EXISTS cs_billing (
+ owner TEXT PRIMARY KEY, customer_id TEXT UNIQUE, subscription_id TEXT UNIQUE,
+ checkout_id TEXT UNIQUE, operation TEXT NOT NULL UNIQUE, operation_at INTEGER NOT NULL,
+ locale TEXT NOT NULL, terms TEXT NOT NULL, status TEXT NOT NULL,
+ paid INTEGER NOT NULL DEFAULT 0, period_end INTEGER,
+ cancel_at_period_end INTEGER NOT NULL DEFAULT 0, risk_hold INTEGER NOT NULL DEFAULT 0,
+ verified_at INTEGER, verification_token TEXT
+);
+CREATE TABLE IF NOT EXISTS cs_billing_events (
+ id TEXT PRIMARY KEY, event_type TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS cs_billing_consents (
+ operation TEXT PRIMARY KEY, owner TEXT NOT NULL, terms TEXT NOT NULL,
+ source TEXT NOT NULL, accepted_at INTEGER NOT NULL
+);

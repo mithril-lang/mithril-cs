@@ -1,4 +1,5 @@
 import engine from "./engine.mjs";
+import {BillingError,billingStatus,checkout,portal,webhook} from "./billing.mjs";
 import {page, css, client, logo, sitemap} from "./ui.mjs";
 import {social} from "./branding.mjs";
 import {reviewPullRequest,snapshotReader} from "./github.mjs";
@@ -160,6 +161,20 @@ export async function api(req,env,ctx){
  if(method==="GET"&&path==="/api/session")return reply({signedIn:true,csrf:actor.csrf,scope,project,source:env.SOURCE_SHA,
   capabilities:{mode:"single-url-passive",maxPages:1,allowedHosts:(env.ALLOWED_HOSTS||"").split(","),autoFix:"review-export-retest",githubPullRequests:false,organizationWorkspaces:false,
    publicReviewRepositories:(env.GITHUB_REPOSITORIES||"mithril-lang/mithril-cs").split(","),continuousScheduling:false}});
+ if(path.startsWith('/api/billing')){
+  if(env.CS_BILLING_MODE&&env.CS_BILLING_MODE!=='live')fail(503,'billing_mode_denied');
+  if(project!=='personal')fail(409,'billing_personal_only');
+  if(method==='GET'&&path==='/api/billing')return reply(await billingStatus(env,actor.id,engine.entitlement));
+  if(method!=='POST')fail(405,'method_not_allowed');await writeGuard(req,actor);
+  let input;try{input=JSON.parse(new TextDecoder().decode(await bounded(req,16384)));}catch{fail(400,'invalid_json');}
+  if(path==='/api/billing/checkout')return reply(await checkout(env,actor.id,input,engine.entitlement));
+  if(path==='/api/billing/portal')return reply(await portal(env,actor.id,input));
+  if(path==='/api/billing/reports'){
+   const status=await billingStatus(env,actor.id,engine.entitlement);if(!status.entitled)fail(403,'pro_subscription_required');
+   const reports=await rows(env,"SELECT id,status,report,created_at FROM cs_runs WHERE owner=? AND project='personal' ORDER BY created_at DESC LIMIT 100",actor.id);
+   const exported={source:env.SOURCE_SHA,coverage:'latest-100-personal-runs',reports:reports.map(r=>({...r,report:r.report?JSON.parse(r.report):null}))};if(new TextEncoder().encode(JSON.stringify(exported)).length>1048576)fail(413,'response_limit');return reply(exported);
+  }fail(404,'not_found');
+ }
  if(method==="GET"&&path==="/api/reviews")return reply({reviews:(await rows(env,"SELECT id,repository,pull_number,head_sha,data,evidence_sha256,created_at FROM cs_reviews WHERE owner=? AND project=? ORDER BY created_at DESC LIMIT 30",actor.id,project)).map(r=>({...r,data:JSON.parse(r.data)}))});
  if(method==="GET"&&path==="/api/infrastructure")return reply({source:env.SOURCE_SHA,observedAt:Date.now(),kind:"configured-service-bindings",resources:[
   {id:"cs",kind:"Worker",name:"mithril-cs",available:true},
@@ -296,6 +311,7 @@ function secure(response,privatePage=false){
 export default {async fetch(req,env,ctx){
  try{
   const u=new URL(req.url);if(u.origin!==ORIGIN)fail(421,"host_not_allowed");
+  if(u.pathname==="/api/billing/webhook"&&req.method==="POST"){if(env.CS_BILLING_MODE!=="live")fail(503,"billing_mode_denied");return secure(json(await webhook(req,env,engine.entitlement)),true);}
   if(u.pathname.startsWith("/api/"))return secure(await api(req,env,ctx),true);
   if(!["GET","HEAD"].includes(req.method))fail(405,"method_not_allowed");
   if(u.pathname==="/robots.txt"||u.pathname==="/sitemap.xml"){
@@ -309,7 +325,7 @@ export default {async fetch(req,env,ctx){
   }
   const asset=u.pathname==="/app.js"?[client,"text/javascript; charset=utf-8"]:u.pathname==="/style.css"?[css,"text/css; charset=utf-8"]:u.pathname==="/mithril.svg"?[logo,"image/svg+xml"]:null;
   if(asset)return secure(new Response(req.method==="HEAD"?null:asset[0],{headers:{"content-type":asset[1],"cache-control":"public, max-age=300"}}));
-  const html=page(u);if(html===null)return secure(new Response("Page not found",{status:404}));
+  const html=page(u,{proCheckoutEnabled:env.CS_BILLING_PUBLIC_CHECKOUT==="true"&&env.CS_BILLING_TAX_READY==="true"&&!!env.STRIPE_CS_KEY});if(html===null)return secure(new Response("Page not found",{status:404}));
   return secure(new Response(req.method==="HEAD"?null:html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":u.pathname.startsWith("/app")?"no-store":"no-cache"}}),u.pathname.startsWith("/app"));
- }catch(e){return secure(json({error:{code:e instanceof Failure?e.code:"temporarily_unavailable"}},e instanceof Failure?e.status:503),true);}
+ }catch(e){return secure(json({error:{code:e instanceof Failure||e instanceof BillingError?e.code:"temporarily_unavailable"}},e instanceof Failure||e instanceof BillingError?e.status:503),true);}
 }};
