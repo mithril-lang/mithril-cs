@@ -30,6 +30,13 @@ def state_proof(secret, policy):
          a.get(PREFIX+"router-node-id")==str(e["node_id"]) and
          a.get(PREFIX+"router-ipv4")==e["tailnet_ipv4"],"state device changed")
     return {"uid":m["uid"],"rv":m["resourceVersion"],"data_sha256":digest(secret["data"])}
+def diagnostic_source(source):
+    old="print('RESIDENT_OWNER_HOLD '+type(error).__name__,file=sys.stderr,flush=True)"
+    new="print('RESIDENT_OWNER_HOLD '+json.dumps(failure_metadata(error),sort_keys=True,separators=(',',':')),file=sys.stderr,flush=True)"
+    need(source.count(old)==1 and 'def failure_metadata(' not in source,'diagnostic source drift')
+    helper="def failure_metadata(error):\n # Source locations only: never exception messages, locals or response bodies.\n frames=[];tb=error.__traceback__\n while tb is not None:\n  name=Path(tb.tb_frame.f_code.co_filename).name\n  if re.fullmatch('[a-z_]+\\.py',name):\n   frames.append({'source':name,'function':tb.tb_frame.f_code.co_name,'line':tb.tb_lineno})\n  tb=tb.tb_next\n return {'class':type(error).__name__,'module':type(error).__module__,'frames':frames[-12:]}\n\n"
+    return source.replace('def main():',helper+'def main():').replace(old,new)
+
 def plan_spec(pod, policy, op):
     need(re.fullmatch("[a-f0-9]{32}",op),"recovery operation")
     need(digest(pod["spec"])==policy["pod_spec_sha256"],"old Podspec drift")
@@ -37,10 +44,15 @@ def plan_spec(pod, policy, op):
     need(not spec.get("ephemeralContainers") and not spec.get("shareProcessNamespace")
          and not spec.get("hostNetwork"),"unexpected isolation")
     tail=next(c for c in spec["containers"] if c["name"]=="tailscale")
-    need(tail["command"][:2]==["/bin/sh","-c"],"unknown watchdog command")
-    tail["command"]=["/init/tini","-g","--"]+tail["command"]
-    tail.setdefault("volumeMounts",[]).append({"name":"init-reaper","mountPath":"/init","readOnly":True})
-    spec["volumes"].append({"name":"init-reaper","configMap":{"name":ARTIFACT,"defaultMode":365}})
+    if tail["command"][:3]==["/init/tini","-g","--"]:
+        need(tail["command"][3:5]==["/bin/sh","-c"],"unknown initialized watchdog")
+        need([m for m in tail.get("volumeMounts",[]) if m.get("name")=="init-reaper"]==[{"name":"init-reaper","mountPath":"/init","readOnly":True}],"init mount drift")
+        need([v for v in spec["volumes"] if v.get("name")=="init-reaper"]==[{"name":"init-reaper","configMap":{"name":ARTIFACT,"defaultMode":365}}],"init volume drift")
+    else:
+        need(tail["command"][:2]==["/bin/sh","-c"],"unknown watchdog command")
+        tail["command"]=["/init/tini","-g","--"]+tail["command"]
+        tail.setdefault("volumeMounts",[]).append({"name":"init-reaper","mountPath":"/init","readOnly":True})
+        spec["volumes"].append({"name":"init-reaper","configMap":{"name":ARTIFACT,"defaultMode":365}})
     policy_name="router-recovery-policy-"+op[:12]; pin_name="router-recovery-pin-"+op[:12]
     for volume in spec["volumes"]:
         if volume["name"]=="resident-policy": volume["configMap"]["name"]=policy_name
@@ -52,7 +64,7 @@ def plan_spec(pod, policy, op):
             if ref and ref["name"]==old_pin: ref["name"]=pin_name
     new["pod_spec_sha256"]=digest(spec)
     return spec,new,policy_name,pin_name
-def lease_recovery_patch(lease, old_policy, new_policy_sha, *, fenced, expected_pin):
+def lease_recovery_patch(lease, old_policy, new_policy_sha, *, fenced, expected_pin, new_source=None):
     need(fenced is True,"old writer must be fenced")
     a=lease["metadata"].get("annotations",{})
     need(lease["metadata"]["uid"]==old_policy["owner_lease_uid"] and
@@ -61,6 +73,7 @@ def lease_recovery_patch(lease, old_policy, new_policy_sha, *, fenced, expected_
          a.get(PREFIX+"pin-sha256")==expected_pin and a.get(PREFIX+"operation")==old_policy["operation"] and
          a.get(PREFIX+"node-uid")==old_policy["node_uid"],"owner changed")
     updated=copy.deepcopy(a); updated[PREFIX+"pin-sha256"]=new_policy_sha
+    updated[PREFIX+"source-sha256"]=new_source or old_policy["source_sha256"]
     return [{"op":"test","path":"/metadata/uid","value":lease["metadata"]["uid"]},
             {"op":"test","path":"/metadata/resourceVersion","value":lease["metadata"]["resourceVersion"]},
             {"op":"test","path":"/spec/holderIdentity","value":old_policy["operation"]},
@@ -145,6 +158,19 @@ class Operator:
         need(nodes.get("kind")=="NodeList" and not nodes["metadata"].get("continue") and len(nodes["items"])==4,"node inventory")
         roster={n["metadata"]["name"]:n["metadata"]["uid"] for n in nodes["items"]}
         op=uuid.uuid4().hex;spec,new,policy_name,pin_name=plan_spec(pod,old,op)
+        # Preserve the original closed runtime and all adapted byte pins; change
+        # only its bounded source-location reporter, then bind the new manifest.
+        source_data=copy.deepcopy(code["data"])
+        source_data["resident_owner_entrypoint.py"]=diagnostic_source(source_data["resident_owner_entrypoint.py"])
+        new["source_files"]={name:hashlib.sha256(body.encode()).hexdigest() for name,body in source_data.items()}
+        new["source_sha256"]=digest(new["source_files"])
+        code_name="router-resident-code-"+new["source_sha256"][:16]
+        for volume in spec["volumes"]:
+            if volume["name"]=="owner-code":volume["configMap"]["name"]=code_name
+        for c in spec["containers"]:
+            for e in c.get("env",[]):
+                if e["name"]=="OWNER_SOURCE_SHA256":e["value"]=new["source_sha256"]
+        new["pod_spec_sha256"]=digest(spec)
         raw=json.dumps(new,sort_keys=True,separators=(",",":"))
         policy_sha=hashlib.sha256(raw.encode()).hexdigest()
         journal="router-recovery-"+op[:12]
@@ -162,6 +188,7 @@ class Operator:
         need(b.get("immutable") is True and digest(b["data"])==proof["data_sha256"],"backup verification")
         need(state_proof(self.get("Secret","router-state-persistent-v1"),old)==proof,"state changed before freeze")
         plan["backup"]={"name":backup_name,"uid":b["metadata"]["uid"],"data_sha256":proof["data_sha256"]}
+        self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":code_name,"namespace":NS},"immutable":True,"data":source_data})
         self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":policy_name,"namespace":NS},"immutable":True,"data":{"policy.json":raw}})
         self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":pin_name,"namespace":NS},"immutable":True,"data":{"policy_sha256":policy_sha}})
         self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":journal,"namespace":NS},"data":{"plan":json.dumps(plan,sort_keys=True,separators=(",",":"))}})
@@ -197,7 +224,7 @@ class Operator:
         need(state_proof(self.get("Secret","router-state-persistent-v1"),plan["old_policy"])==plan["old_state"],"drain state changed")
         self.save(plan["journal"],"old-writer-fenced")
         lease=self.get("Lease",OWNER,LNS)
-        patch=lease_recovery_patch(lease,plan["old_policy"],plan["new_policy_sha256"],fenced=True,expected_pin=plan["old_policy_sha256"])
+        patch=lease_recovery_patch(lease,plan["old_policy"],plan["new_policy_sha256"],fenced=True,expected_pin=plan["old_policy_sha256"],new_source=plan["new_policy"]["source_sha256"])
         self.call(["patch","lease",OWNER,"-n",LNS,"--type=json","--patch-file","/dev/stdin","-o","json"],patch)
         self.save(plan["journal"],"same-holder-reconciled")
         current=self.get("StatefulSet",STS);template=copy.deepcopy(plan["old_template"]);template["spec"]=plan["new_spec"]
@@ -207,7 +234,7 @@ class Operator:
                    {"op":"test","path":"/spec/replicas","value":0},
                    {"op":"replace","path":"/spec/template","value":template}])
         # Refresh once while no worker can run; never race the worker's renewal.
-        lease=self.get("Lease",OWNER,LNS);updated=copy.deepcopy(plan["old_policy"])
+        lease=self.get("Lease",OWNER,LNS);updated=copy.deepcopy(plan["new_policy"])
         patch=lease_recovery_patch(lease,updated,plan["new_policy_sha256"],fenced=True,expected_pin=plan["new_policy_sha256"])
         self.call(["patch","lease",OWNER,"-n",LNS,"--type=json","--patch-file","/dev/stdin","-o","json"],patch)
         self.save(plan["journal"],"new-writer-start-intent")
@@ -274,6 +301,29 @@ class Contracts(unittest.TestCase):
         self.assertEqual(pod,original);self.assertEqual(new["source_sha256"],p["source_sha256"])
         self.assertEqual(spec["containers"][0]["command"][3:],pod["spec"]["containers"][0]["command"])
         self.assertNotEqual(new["pod_spec_sha256"],p["pod_spec_sha256"])
+    def test_initialized_recovery_preserves_tini(self):
+        pod,p=self.fixture();spec,new,_,_=plan_spec(pod,p,"c"*32)
+        again,_,_,_=plan_spec({"spec":spec},new,"d"*32)
+        self.assertEqual(again["containers"][0]["command"],spec["containers"][0]["command"])
+        self.assertEqual(len([v for v in again["volumes"] if v["name"]=="init-reaper"]),1)
+    def test_initialized_recovery_rejects_mount_drift(self):
+        pod,p=self.fixture();spec,new,_,_=plan_spec(pod,p,"c"*32)
+        spec["containers"][0]["volumeMounts"][0]["readOnly"]=False
+        new["pod_spec_sha256"]=digest(spec)
+        with self.assertRaises(RuntimeError):plan_spec({"spec":spec},new,"d"*32)
+    def test_diagnostic_never_includes_error_text(self):
+        source="import json,re\nfrom pathlib import Path\ndef main():\n try: raise RuntimeError('CREDENTIAL_SENTINEL')\n except Exception as error:\n  print('RESIDENT_OWNER_HOLD '+type(error).__name__,file=sys.stderr,flush=True)\n"
+        updated=diagnostic_source(source);ns={};exec(compile(updated,'resident_owner_entrypoint.py','exec'),ns)
+        try:raise RuntimeError('CREDENTIAL_SENTINEL')
+        except Exception as e:result=ns['failure_metadata'](e)
+        self.assertNotIn('CREDENTIAL_SENTINEL',json.dumps(result))
+        self.assertEqual(result['class'],'RuntimeError')
+        with self.assertRaises(RuntimeError):diagnostic_source(updated)
+    def test_new_source_binding_only_after_fencing(self):
+        _,p=self.fixture();lease={"metadata":{"uid":"lease","resourceVersion":"1","annotations":{PREFIX+"source-sha256":"b"*64,PREFIX+"pin-sha256":"e"*64,PREFIX+"node-uid":"node",PREFIX+"operation":"a"*32}},"spec":{"holderIdentity":"a"*32}}
+        patch=lease_recovery_patch(lease,p,"d"*64,fenced=True,expected_pin="e"*64,new_source="f"*64)
+        self.assertEqual(next(v['value'] for v in patch if v['path']=='/metadata/annotations' and v['op']=='replace')[PREFIX+'source-sha256'],'f'*64)
+        with self.assertRaises(RuntimeError):lease_recovery_patch(lease,p,"d"*64,fenced=False,expected_pin="e"*64,new_source="f"*64)
     def test_source_drift_rejected(self):
         pod,p=self.fixture();pod["spec"]["hostNetwork"]=True
         with self.assertRaises(RuntimeError):plan_spec(pod,p,"c"*32)
@@ -300,7 +350,7 @@ def main():
     if "--selftest" in sys.argv:
         suite=unittest.defaultTestLoader.loadTestsFromTestCase(Contracts)
         result=unittest.TextTestRunner(verbosity=2).run(suite)
-        raise SystemExit(0 if result.wasSuccessful() and result.testsRun==5 else 1)
+        raise SystemExit(0 if result.wasSuccessful() and result.testsRun==9 else 1)
     parser=argparse.ArgumentParser()
     parser.add_argument("action",choices=["prepare","execute","commit"])
     parser.add_argument("--kubeconfig",required=True);parser.add_argument("--source",required=True)
