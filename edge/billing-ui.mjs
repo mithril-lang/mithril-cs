@@ -29,11 +29,11 @@ function browserBilling(){
  async function load(){
   if(busy)return;const version=++epoch;clearTimeout(timer);root.setAttribute('aria-busy','true');root.innerHTML='<p>'+t('Checking subscription…','契約状態を確認しています…')+'</p>';
   try{session=await call('session');const v=await call('billing');if(version!==epoch)return;render(v);root.removeAttribute('aria-busy');
-   if(v.state==='pending'&&new URL(location.href).searchParams.get('checkout')==='return'&&polls++<12)timer=setTimeout(load,5000);
+   if(['pending','incomplete'].includes(v.state)&&new URL(location.href).searchParams.get('checkout')==='return'&&polls++<12)timer=setTimeout(load,5000);
   }catch(e){root.removeAttribute('aria-busy');if(e.status===401){login();return;}error(e);const b=document.createElement('button');b.textContent=t('Refresh','更新');b.onclick=load;root.append(b);}
  }
  function render(v){
-  const label=v.entitled?t('Pro is active','Proをご利用いただけます'):v.riskHold?t('Review required','契約の確認が必要です'):v.state==='past_due'||v.state==='unpaid'?t('Update your payment method','お支払いを確認してください'):v.cancelAtPeriodEnd?t('Cancellation scheduled','解約予約済み'):t('Pro subscription','Proの申込と契約');
+  const label=v.cancelAtPeriodEnd&&v.entitled?t('Cancellation scheduled','解約予約済み'):v.entitled?t('Pro is active','Proをご利用いただけます'):v.riskHold?t('Review required','契約の確認が必要です'):v.state==='past_due'||v.state==='unpaid'?t('Update your payment method','お支払いを確認してください'):['pending','incomplete'].includes(v.state)?t('Confirming payment','支払い状況を確認しています'):t('Pro subscription','Proの申込と契約');
   root.innerHTML='<div class="row"><h1>'+label+'</h1><button id="billing-refresh">'+t('Refresh status','状態を更新')+'</button></div><section class="cs-evidence"><p class="cs-eyebrow">MITHRIL CONTINUOUS SECURITY</p><h2>Pro <span class="status">'+esc(v.state)+'</span></h2><p class="cs-price">$29 <small>'+t('/ month · 1 seat','／月・1席')+'</small></p><p>'+t('Monthly renewal. Pentests are billed separately.','毎月自動更新。Pentestは別料金です。')+'</p>'+(v.periodEnd?'<p>'+t('Current period ends: ','現在の契約期間の終了：')+esc(new Date(v.periodEnd*1000).toLocaleString(ja?'ja-JP':'en-US'))+'</p>':'')+(v.cancelAtPeriodEnd?'<p class="notice">'+t('Renewal is canceled. Access continues until the paid period ends.','次回の更新は解約予約済みです。支払い済み期間の終了まで利用できます。')+'</p>':'')+'</section>';
   root.querySelector('#billing-refresh').onclick=load;
   if(!v.ready&&v.portalAvailable){root.insertAdjacentHTML('beforeend','<p><button id="billing-held-portal">'+t('Manage subscription on Stripe','Stripeで契約を管理')+'</button></p>');root.querySelector('#billing-held-portal').onclick=()=>redirect('portal',{locale:ja?'ja':'en'});}
