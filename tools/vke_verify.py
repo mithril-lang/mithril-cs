@@ -53,11 +53,13 @@ def main():
     p.add_argument("--node", required=True)
     p.add_argument("--node-uid", required=True)
     p.add_argument("--baseline", required=True, help="existing owner-reviewed CI platform policy JSON")
+    p.add_argument("--review-2487", action="store_true", help="Bounded company replay and candidate context evidence")
     p.add_argument("--zap", action="store_true", help="Standalone Mithril scanner full tests and passive HTTP dogfood")
     p.add_argument("--all-runtimes", action="store_true", help="Run JVM, compiled CLJS/Node and BB with pinned toolchain inputs")
     p.add_argument("--python-contracts", action="store_true", help="Run the bounded router recovery contract suite")
     p.add_argument("--additional-slot", action="store_true", help="Preserve exact legacy unknown reservation (4GiB/2CPU); add bounded CS slot")
     args = p.parse_args()
+    if args.review_2487: args.zap = True
     image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9" if args.python_contracts else BB
     if args.zap: image = "docker.io/library/python@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9"
     need(sum([args.zap,args.all_runtimes,args.python_contracts])<=1,"choose one recipe")
@@ -256,7 +258,7 @@ def main():
         prior=get("networkpolicy","mcs-maven-egress","-n",NS,absent=True)
         if prior is None:create(policy)
         else: need(prior["spec"]==policy["spec"],"Maven policy addresses changed; requalify")
-    ledger = {"operation":operation,"source":args.source,"phase":"pre-submit","job":name,"image":image,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
+    ledger = {"operation":operation,"issue":"MITHRIL-2487" if args.review_2487 else ("MITHRIL-2485" if args.zap else "MITHRIL-2471"),"source":args.source,"phase":"pre-submit","job":name,"image":image,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
     journal = {"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name+"-journal","namespace":NS},"data":{"state":json.dumps(ledger)}}
     create(journal)
     lease = create({"apiVersion":"coordination.k8s.io/v1","kind":"Lease","metadata":{"name":LEASE,"namespace":LNS,"annotations":{"mithril.fund/owner_issue":"MITHRIL-2471","mithril.fund/source":args.source}},"spec":{"holderIdentity":operation,"leaseDurationSeconds":900,"acquireTime":datetime.datetime.now(datetime.timezone.utc).isoformat()}})
@@ -316,7 +318,8 @@ echo ALL_RUNTIMES_PASS
         old=get("NetworkPolicy","mcs-zap-egress","-n",NS,absent=True)
         if old is None: create(scan_policy)
         else: need(old["spec"]==scan_policy["spec"],"company peer drift requires requalification")
-        script=script[:script.index("cd /tmp/source")] + "cd /tmp/source\nexport PATH=/tooling:/usr/local/bin:/usr/bin:/bin\nexport LD_LIBRARY_PATH=/tooling\npython -B tools/test_zap_ci.py\npython -B tools/zap_ci.py\n"
+        script=script[:script.index("cd /tmp/source")] + "cd /tmp/source\nexport PATH=/tooling:/usr/local/bin:/usr/bin:/bin\nexport LD_LIBRARY_PATH=/tooling\npython -B tools/test_zap_ci.py\npython -B tools/test_review_2487.py\npython -B tools/zap_ci.py\n"
+    if args.review_2487: script += "python -B tools/review_2487.py\n"
     container = {"name":"contracts","image":image,"command":["/init/tini","-g","--","sh","-c",script],"env":[{"name":"HOME","value":"/tmp"},{"name":"TMPDIR","value":"/tmp"}],
       "resources":{"requests":{"cpu":"200m","memory":"256Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"512Mi"}},
       "securityContext":{"allowPrivilegeEscalation":False,"readOnlyRootFilesystem":True,"capabilities":{"drop":["ALL"]}},
@@ -389,7 +392,7 @@ echo ALL_RUNTIMES_PASS
             kube("delete","--raw","/apis/coordination.k8s.io/v1/namespaces/"+LNS+"/leases/"+LEASE,"-f","-",body={"apiVersion":"v1","kind":"DeleteOptions","preconditions":{"uid":lease_uid,"resourceVersion":current["metadata"]["resourceVersion"]}})
             need(get("lease",LEASE,"-n",LNS,absent=True) is None, "release unknown")
             print(json.dumps(ledger),flush=True)
-            print("\n".join(l for l in logs.stdout.splitlines() if l.startswith(("Testing ","Ran ","0 failures","FAIL","ERROR","expected:","  actual:","TINI_","ALL_","OK","test_","PRIVATE_","ZAP_","PYTHON_","CWE matrix","clojure","ClojureScript"))),flush=True)
+            print("\n".join(l for l in logs.stdout.splitlines() if l.startswith(("Testing ","Ran ","0 failures","FAIL","ERROR","expected:","  actual:","TINI_","ALL_","OK","test_","PRIVATE_","ZAP_","REVIEW_SUMMARY","REVIEW_PASS","PYTHON_","CWE matrix","clojure","ClojureScript"))),flush=True)
             raise SystemExit(0 if success else 1)
         time.sleep(3)
     raise RuntimeError("deadline unknown; retain source/journal/lease for reconciliation")

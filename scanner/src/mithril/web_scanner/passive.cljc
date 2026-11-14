@@ -1086,8 +1086,12 @@
   containing RFC1918 or loopback addresses. Pure body inspection."
   [{:keys [url]} resp]
   (let [body (str (get resp :body ""))
-        pats [#"10.[0-9]+.[0-9]+.[0-9]+" #"192.168.[0-9]+.[0-9]+" #"172.1[6-9].[0-9]+.[0-9]+" #"172.2[0-9].[0-9]+.[0-9]+" #"172.3[01].[0-9]+.[0-9]+" #"127.[0-9]+.[0-9]+.[0-9]+"]
-        hits (remove nil? (map #(re-find % body) pats))]
+        octet "(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
+        ;; Split prefixes so every address has exactly four validated octets.
+        short-prefix "(?:10|127)"
+        long-prefix "(?:192\\.168|172\\.(?:1[6-9]|2[0-9]|3[01]))"
+        pattern (re-pattern (str "(?<![A-Za-z0-9_.])(?:" short-prefix "\\." octet "\\." octet "\\." octet "|" long-prefix "\\." octet "\\." octet ")(?![A-Za-z0-9_.])"))
+        hits (re-seq pattern body)]
     (if (seq hits)
       [(core/finding {:rule-id "40040"
                       :cwe "CWE-200"
@@ -1259,12 +1263,15 @@
   [{:keys [url]} resp]
   (let [body (str (get resp :body ""))
         https-page (some? (re-find #"(?i)^https://" (str url)))
-        m (when https-page (re-find #"(?i)http://[A-Za-z0-9]" body))]
+        ;; XML namespace identifiers do not initiate an HTTP request.
+        stripped (clojure.string/replace body #"(?i)\s+xmlns(?::[A-Za-z0-9_-]+)?\s*=\s*[\"'][^\"']*[\"']" "")
+        m (when https-page (re-find #"(?i)http://[A-Za-z0-9]" stripped))
+        resource (re-find #"(?i)(?:src|srcset|poster|data)\s*=\s*[\"']http://|url\(\s*[\"']?http://|<link\b[^>]*href\s*=\s*[\"']http://|<(?:image|use)\b[^>]*(?:xlink:)?href\s*=\s*[\"']http://" stripped)]
     (if m
       [(core/finding {:rule-id "40049"
                       :cwe "CWE-319"
-                      :severity :medium
-                      :title "Mixed content: http resource on https page"
+                      :severity (if resource :medium :info)
+                      :title (if resource "Mixed content: http resource on https page" "HTTP reference requires execution context review")
                       :evidence (subs (str m) 0 (min 32 (count (str m))))
                       :url url
                       :solution "Serve all resources over HTTPS."})]
