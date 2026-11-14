@@ -1,6 +1,7 @@
 (ns mithril.cs.edge
   "Portable bounded passive-response review. No network, storage or clock."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [mithril.cs.rules :as source-rules]))
 (def limits {:max-pages 1 :response-bytes 1048576 :request-timeout-ms 15000
              :run-deadline-ms 25000 :concurrency 1 :method "GET"})
 (def rules
@@ -50,5 +51,6 @@
                           input {:url (get v "url") :status (get v "status")
                                  :headers (get v "headers") :body-complete (get v "body-complete")}]
                       (clj->js (assess input))))
+          :reviewText (fn [text] (clj->js (source-rules/review-text text)))
           :transition (fn [from to] (allowed-transition? from to))
           :limits (clj->js limits)}))
