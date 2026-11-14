@@ -349,6 +349,7 @@ if timeout 3 bash -c 'exec 3<>/dev/tcp/10.96.0.1/443'; then echo PRIVATE_API_EGR
 echo ALL_RUNTIMES_PASS
 """
     if args.edge_console:
+        script=script.replace("-Xmx640m -Duser.home=/tmp", "-Xmx448m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Duser.home=/tmp")
         script += r"""
 clojure -M:edge-build
 cp /tmp/mithril-edge-engine.mjs edge/engine.mjs
