@@ -11,7 +11,7 @@ function fixture(){
  const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
  const DB={prepare(sql){let args=[];const q={bind(...v){args=v;return q;},async first(){return db.prepare(sql).get(...args)||null;},async all(){return {results:db.prepare(sql).all(...args)};},async run(){return {meta:{changes:Number(db.prepare(sql).run(...args).changes)}};}};return q;}};
  const calls=[],customers=new Map(),sessions=new Map(),subs=new Map(),invoices=new Map(),cache=new Map();
- let creates=0,customerCreates=0,merchant=MERCHANT,productId='prod_fixture',unit=2900,tax=true,badUrl=false,loseCheckout=false,hold=null,entered=null;
+ let creates=0,customerCreates=0,merchant=MERCHANT,charges=true,productId='prod_fixture',unit=2900,tax=true,badUrl=false,loseCheckout=false,hold=null,entered=null;
  const price={id:'price_fixture',currency:'usd',unit_amount:2900,recurring:{interval:'month',interval_count:1,usage_type:'licensed'}};
  const env={DB,SOURCE_SHA:'a'.repeat(40),STRIPE_CS_KEY:'rk_live_fixture_only',STRIPE_CS_WEBHOOK_SECRET:'fixture-signing-only',STRIPE_CS_PRICE:'price_fixture',STRIPE_CS_PORTAL_CONFIG:'bpc_fixture',CS_BILLING_MODE:'live',CS_BILLING_TAX_READY:'true',
   AUTH:{async fetch(req){const tok=req.headers.get('cookie')?.split('=')[1];return ['a'.repeat(32),'b'.repeat(32)].includes(tok)?Response.json({userId:tok[0]==='a'?'alice':'bob'}):Response.json({}, {status:401});}}};
@@ -20,7 +20,7 @@ function fixture(){
   const p=u.pathname.slice(4),form=new URLSearchParams(opts.body),key=opts.headers['idempotency-key'];calls.push({path:p,method:opts.method,key,body:opts.body?.toString()});
   if(key&&cache.has(key)){const v=cache.get(key);assert.equal(v.body,opts.body.toString());return Response.json(v.data);}
   let d;
-  if(p==='account')d={id:merchant,charges_enabled:true};
+  if(p==='account')d={id:merchant,charges_enabled:charges};
   else if(p==='prices/price_fixture')d={...price,unit_amount:unit,active:true,product:productId,livemode:true};
   else if(p==='products/prod_fixture'||p==='products/mithril_cs_pro_v1')d={active:true,tax_code:'fixture_tax_code',metadata:{service:SERVICE},livemode:true};
   else if(p==='tax/registrations')d={data:tax?[{id:'taxreg_fixture',status:'active'}]:[],has_more:false};
@@ -51,7 +51,7 @@ function fixture(){
   const raw=JSON.stringify({id:eventId,livemode:true,type,data:{object},...override});const time=Math.floor(Date.now()/1000);const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.STRIPE_CS_WEBHOOK_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']);const sig=[...new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(time+'.'+raw)))].map(x=>x.toString(16).padStart(2,'0')).join('');
   return webhook(new Request('https://cs.mithril.fund/api/billing/webhook',{method:'POST',headers:{'stripe-signature':'t='+time+',v1='+sig},body:raw}),env,eligible);
  }
- return {env,db,calls,customers,sessions,subs,invoices,consent,pay,event,get creates(){return creates;},get customerCreates(){return customerCreates;},merchant(v){merchant=v;},product(v){productId=v;},unit(v){unit=v;},tax(v){tax=v;},badUrl(){badUrl=true;},lose(){loseCheckout=true;},pause(){let release;const wait=new Promise(r=>release=r);const ready=new Promise(r=>entered=r);hold=wait;return {ready,release};}};
+ return {env,db,calls,customers,sessions,subs,invoices,consent,pay,event,get creates(){return creates;},get customerCreates(){return customerCreates;},merchant(v){merchant=v;},charges(v){charges=v;},product(v){productId=v;},unit(v){unit=v;},tax(v){tax=v;},badUrl(){badUrl=true;},lose(){loseCheckout=true;},pause(){let release;const wait=new Promise(r=>release=r);const ready=new Promise(r=>entered=r);hold=wait;return {ready,release};}};
 }
 test('provisioned custom Product ID is supported without accepting provider paths',async()=>{
  const f=fixture();f.product('mithril_cs_pro_v1');assert.equal((await billingStatus(f.env,'alice',eligible)).ready,true);
@@ -59,7 +59,7 @@ test('provisioned custom Product ID is supported without accepting provider path
  assert.equal(f.calls.some(c=>c.path.includes('..')||c.path.includes('://')),false);
 });
 test('isolated test mode pins the separate sandbox and cannot change the live merchant',async()=>{
- const f=fixture();f.env.CS_BILLING_MODE='test';f.env.STRIPE_CS_KEY='rk_test_fixture_only';f.env.CS_BILLING_ISOLATED_TEST='true';f.merchant(TEST_MERCHANT);
+ const f=fixture();f.env.CS_BILLING_MODE='test';f.env.STRIPE_CS_KEY='rk_test_fixture_only';f.env.CS_BILLING_ISOLATED_TEST='true';f.merchant(TEST_MERCHANT);f.charges(false);
  const transport=f.env.STRIPE_TRANSPORT;f.env.STRIPE_TRANSPORT=async(...args)=>{const d=await (await transport(...args)).json();return Response.json(JSON.parse(JSON.stringify(d,(k,v)=>k==='livemode'?false:v)));};
  assert.equal((await billingStatus(f.env,'alice',eligible)).ready,true);
  f.merchant(MERCHANT);assert.equal((await billingStatus(f.env,'alice',eligible)).ready,false);
@@ -68,7 +68,7 @@ test('isolated test mode pins the separate sandbox and cannot change the live me
 });
 test('billing missing credentials is unavailable without exposing secrets or calling Stripe',async()=>{const f=fixture();delete f.env.STRIPE_CS_KEY;const v=await billingStatus(f.env,'alice',eligible);assert.equal(v.ready,false);assert.equal(v.entitled,false);assert.equal(f.calls.length,0);assert.equal(JSON.stringify(v).includes('fixture-signing'),false);});
 test('billing requires merchant, fixed monthly price, mode and active tax registrations',async()=>{
- for(const mutate of [f=>f.merchant('acct_foreign'),f=>f.unit(2000),f=>f.tax(false),f=>f.env.STRIPE_CS_KEY='rk_test_fixture_only']){const f=fixture();mutate(f);const v=await billingStatus(f.env,'alice',eligible);assert.equal(v.ready,false);assert.equal(v.entitled,false);assert.equal(f.creates,0);}
+ for(const mutate of [f=>f.merchant('acct_foreign'),f=>f.charges(false),f=>f.unit(2000),f=>f.tax(false),f=>f.env.STRIPE_CS_KEY='rk_test_fixture_only']){const f=fixture();mutate(f);const v=await billingStatus(f.env,'alice',eligible);assert.equal(v.ready,false);assert.equal(v.entitled,false);assert.equal(f.creates,0);}
 });
 test('billing requires explicit versioned terms and recurring consent',async()=>{const f=fixture();for(const c of [{},{acceptedTerms:TERMS},{acceptedTerms:'stale',recurring:true}])await assert.rejects(checkout(f.env,'alice',c,eligible),/billing_consent_required/);assert.equal(f.calls.length,0);});
 test('simultaneous checkout retries create one customer and one Checkout; amount and owner cannot be injected',async()=>{const f=fixture();await Promise.all([checkout(f.env,'alice',{...f.consent,owner:'bob',amount:1},eligible),checkout(f.env,'alice',f.consent,eligible)]);assert.equal(f.customerCreates,1);assert.equal(f.creates,1);assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM cs_billing_consents').get().n,1);});

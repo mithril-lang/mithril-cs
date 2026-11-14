@@ -16,6 +16,21 @@ Dedicated development Sandbox: `acct_1Ubf2TIJVnMCo3dC`,
 adapter pins this account in isolated test mode; the production entrypoint
 continues to reject all test-mode requests.
 
+This empty Sandbox reports `charges_enabled=false` but successfully created
+an unpaid test hosted Checkout with the exact monthly Price and automatic
+tax. The live merchant still must report `charges_enabled=true`. Sandbox Tax
+settings use a synthetic address and New Jersey fixture registration solely
+to test collection; no real merchant registration is implied or modified.
+
+The owner-side `tools/stripe_sandbox_verify.mjs` reads protected, temporary
+Sandbox credentials and resource IDs from `CS_SANDBOX_STATE`, requires an
+exact `CS_SOURCE_SHA`, and binds an HTTP listener to loopback only. It calls
+the real adapter and Stripe API and accepts signed provider notifications
+forwarded by the Stripe CLI. It refuses live keys and any other account.
+Its synthetic owner is separate from actual Mithril authentication. This
+qualifies provider behavior only, not production login or public webhook
+delivery. Do not run this controller in VKE, PR jobs or a public Worker.
+
 Design: Figma file `N42vvZ2M7tgH2IkGXUUOWP`, section `1057:46215`.
 Sixteen desktop states cover Grid/Porcelain, with two mobile examples. Card
 entry belongs to hosted Stripe Checkout; card data never reaches this Worker.

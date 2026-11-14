@@ -43,7 +43,9 @@ async function list(env,path,query){
 }
 export async function readiness(env){
  if(!configured(env))return false;
- const account=await stripe(env,'account');if(account.id!==(mode(env)?MERCHANT:TEST_MERCHANT)||account.charges_enabled!==true)stop('billing_merchant_mismatch',503);
+ // A separate Sandbox can create test Checkout while charges_enabled is false
+ // (observed on our empty sandbox). Live acquisition still requires it true.
+ const account=await stripe(env,'account');if(account.id!==(mode(env)?MERCHANT:TEST_MERCHANT)||(mode(env)&&account.charges_enabled!==true))stop('billing_merchant_mismatch',503);
  const price=await stripe(env,'prices/'+id(env.STRIPE_CS_PRICE,'price'));
  if(!price.active||price.currency!=='usd'||price.unit_amount!==2900||price.recurring?.interval!=='month'||price.recurring?.interval_count!==1||price.recurring?.usage_type!=='licensed')stop('billing_price_mismatch',503);
  const productId=typeof price.product==='string'?price.product:price.product?.id;
