@@ -1,6 +1,6 @@
 """Owner-controller pure accounting regressions; no cluster or filesystem writes."""
 import datetime,unittest
-from vke_verify import owned_memory_credit,GIB
+from vke_verify import owned_memory_credit,dedicated_node_lease,GIB
 class MemoryBudget(unittest.TestCase):
  def sample(self,uid="owned",used=123,age=0):
   return {"node":{"memory":{"time":datetime.datetime.fromtimestamp(1000,datetime.timezone.utc).isoformat()}},"pods":[{"podRef":{"uid":uid},"memory":{"workingSetBytes":used,"time":datetime.datetime.fromtimestamp(1000-age,datetime.timezone.utc).isoformat()}}]}
@@ -30,4 +30,27 @@ class MemoryBudget(unittest.TestCase):
   used=int(.8*GIB);free=int(5.2*GIB);self.assertGreaterEqual(free+used,6*GIB-1)
   self.assertGreaterEqual(free,4*GIB+GIB)
   self.assertLess(int(4.9*GIB)+GIB,6*GIB)
+class DedicatedCapacity(unittest.TestCase):
+ def fixture(self):
+  uid="12345678-1234-1234-1234-123456789012";name="ci-cs-capacity-20261114-example"
+  node={"metadata":{"name":name,"uid":uid,"labels":{"mithril.fund/owner":"MITHRIL-2527"}},"spec":{"providerID":"vultr://87654321-1234-1234-1234-123456789012","taints":[{"key":"mithril.fund/execution-lane","value":"ci-profile","effect":"NoSchedule"}]}}
+  policy={"issue":"MITHRIL-2527","approved":True,"original_nodes":{"held":"old-uid"},"node":{"name":name,"uid":uid,"provider_id":node["spec"]["providerID"]}}
+  return policy,node,{"held":"old-uid",name:uid}
+ def test_additional_node_has_independent_uid_lock(self):
+  p,n,r=self.fixture();self.assertEqual("mithril-cs-node-"+n["metadata"]["uid"],dedicated_node_lease(p,n,r))
+ def test_existing_held_node_cannot_change_locks(self):
+  p,n,r=self.fixture();p["original_nodes"][n["metadata"]["name"]]=n["metadata"]["uid"]
+  with self.assertRaises(RuntimeError):dedicated_node_lease(p,n,r)
+ def test_foreign_original_change_rejected(self):
+  p,n,r=self.fixture();r["held"]="different"
+  with self.assertRaises(RuntimeError):dedicated_node_lease(p,n,r)
+ def test_no_taint_rejected(self):
+  p,n,r=self.fixture();n["spec"]["taints"]=[]
+  with self.assertRaises(RuntimeError):dedicated_node_lease(p,n,r)
+ def test_wrong_provider_rejected(self):
+  p,n,r=self.fixture();n["spec"]["providerID"]="vultr://00000000-0000-0000-0000-000000000000"
+  with self.assertRaises(RuntimeError):dedicated_node_lease(p,n,r)
+ def test_missing_approval_rejected(self):
+  p,n,r=self.fixture();p["approved"]=False
+  with self.assertRaises(RuntimeError):dedicated_node_lease(p,n,r)
 if __name__=="__main__":unittest.main()

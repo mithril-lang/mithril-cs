@@ -46,6 +46,29 @@ def terminal(pod):
                 return False
     return True
 
+def dedicated_node_lease(policy, node, roster):
+    """Only an independently approved additional node gets its own admission lock.
+    Existing nodes and their unknown owners/leases remain outside this lane.
+    """
+    need(policy.get("issue") == "MITHRIL-2527" and policy.get("approved") is True,
+         "dedicated capacity approval missing")
+    expected = policy.get("node", {})
+    originals = policy.get("original_nodes", {})
+    metadata = node["metadata"]
+    uid = metadata["uid"]
+    need(originals and all(roster.get(name) == value for name, value in originals.items()),
+         "original capacity identity changed")
+    need(metadata["name"] not in originals and uid not in originals.values()
+         and metadata["name"].startswith("ci-cs-capacity-20261114-")
+         and expected == {"name": metadata["name"], "uid": uid,
+                          "provider_id": node["spec"].get("providerID")}
+         and re.fullmatch(r"vultr://[0-9a-f-]{36}", expected.get("provider_id", "")),
+         "dedicated node provenance mismatch")
+    need(metadata.get("labels", {}).get("mithril.fund/owner") == "MITHRIL-2527"
+         and {"key": "mithril.fund/execution-lane", "value": "ci-profile", "effect": "NoSchedule"}
+         in node["spec"].get("taints", []), "dedicated node isolation missing")
+    return "mithril-cs-node-" + uid
+
 def owned_memory_credit(stats, pod_uid, now, limit_bytes=GIB):
     """Credit only measured bytes already consumed by this exact active Pod.
     Initial admission still requires the unchanged6GiB budget. The4GiB foreign
@@ -71,6 +94,7 @@ def main():
     p.add_argument("--node", required=True)
     p.add_argument("--node-uid", required=True)
     p.add_argument("--baseline", required=True, help="existing owner-reviewed CI platform policy JSON")
+    p.add_argument("--dedicated-capacity-policy", help="Owner-private approved additional-node identity; never reuses an existing held node")
     p.add_argument("--edge-console", action="store_true", help="Compile portable edge policy and run authenticated console adapter tests")
     p.add_argument("--edge-memory-mib",type=int,choices=[768,1024],default=1024,
                    help="Explicit edge allocation; reserves legacy4GiB plus this allocation plus1GiB free margin")
@@ -80,6 +104,8 @@ def main():
     p.add_argument("--python-contracts", action="store_true", help="Run the bounded router recovery contract suite")
     p.add_argument("--additional-slot", action="store_true", help="Preserve exact legacy unknown reservation (4GiB/2CPU); add bounded CS slot")
     args = p.parse_args()
+    global LEASE
+    need(not (args.dedicated_capacity_policy and args.additional_slot), "dedicated capacity cannot borrow a legacy reservation")
     if args.review_2487: args.zap = True
     if args.edge_console: args.all_runtimes = True
     need(args.edge_console or args.edge_memory_mib==1024,"edge allocation requires edge recipe")
@@ -155,6 +181,9 @@ def main():
     roster = {n["metadata"]["name"]: n["metadata"]["uid"] for n in nodes}
     need(roster.get(args.node) == args.node_uid, "node identity changed")
     node = next(n for n in nodes if n["metadata"]["name"] == args.node)
+    capacity_policy = json.load(open(args.dedicated_capacity_policy)) if args.dedicated_capacity_policy else None
+    if capacity_policy:
+        LEASE = dedicated_node_lease(capacity_policy, node, roster)
     platform = {}
     legacy_uid = "ac94ce8f-c3b7-4b53-b538-11bfa04600cb"
     legacy_job_uid = "e027dce0-eb67-4880-8f8f-c3d37ff80f93"
@@ -191,6 +220,9 @@ def main():
     def fresh():
         current_nodes = complete(get("nodes"), "Node")
         need({n["metadata"]["name"]: n["metadata"]["uid"] for n in current_nodes} == roster, "node roster changed")
+        if capacity_policy:
+            current_node = next(n for n in current_nodes if n["metadata"]["uid"] == args.node_uid)
+            need(dedicated_node_lease(capacity_policy, current_node, roster) == LEASE, "dedicated capacity drift")
         for n in current_nodes:
             c = {x["type"]: x["status"] for x in n["status"]["conditions"]}
             need(c.get("Ready") == "True" and all(c.get(t) == "False" for t in
@@ -320,7 +352,7 @@ def main():
         prior=get("networkpolicy","mcs-maven-egress","-n",NS,absent=True)
         if prior is None:create(policy)
         else: need(prior["spec"]==policy["spec"],"Maven policy addresses changed; requalify")
-    ledger = {"operation":operation,"issue":"MITHRIL-2206" if args.edge_console else ("MITHRIL-2487" if args.review_2487 else ("MITHRIL-2485" if args.zap else "MITHRIL-2471")),"source":args.source,"phase":"pre-submit","job":name,"image":image,"initial":initial,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
+    ledger = {"operation":operation,"issue":"MITHRIL-2206" if args.edge_console else ("MITHRIL-2487" if args.review_2487 else ("MITHRIL-2485" if args.zap else "MITHRIL-2471")),"source":args.source,"phase":"pre-submit","job":name,"image":image,"initial":initial,"admission_lease":LEASE,"node_uid":args.node_uid,"legacy_reservation":{"outcome":"UNKNOWN","memory_bytes":4*GIB,"cpu":2,"pod_uid":legacy_uid} if args.additional_slot else None}
     journal = {"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name+"-journal","namespace":NS},"data":{"state":json.dumps(ledger)}}
     create(journal)
     lease = create({"apiVersion":"coordination.k8s.io/v1","kind":"Lease","metadata":{"name":LEASE,"namespace":LNS,"annotations":{"mithril.fund/owner_issue":"MITHRIL-2471","mithril.fund/source":args.source}},"spec":{"holderIdentity":operation,"leaseDurationSeconds":900,"acquireTime":datetime.datetime.now(datetime.timezone.utc).isoformat()}})
