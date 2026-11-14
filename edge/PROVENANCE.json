@@ -11,5 +11,23 @@
     "src/content/blog/vulnerability-terms.ts": "26aaec7e23b5d9702ed0320b305592a5250eb6bfac8478a2503a5cdbb19b947f"
   },
   "ownership": "Mithril-owned public design/content snapshot; no live source resolution",
-  "note": "Verify against pinned Git objects before publishing; working-tree bytes must equal the recorded revision."
+  "note": "Verify against pinned Git objects before publishing; working-tree bytes must equal the recorded revision.",
+  "branding": {
+    "repository": "mithril-lang/mithril-fund",
+    "revision": "6639caae82343c2ae75aa52895cbc7bc06f46170",
+    "files": {
+      "apps/web/src/components/mithril-wordmark.tsx": "701619e370510d268d60972f2ccf6abc882a19c7897c0abfa4a6bcd5cdab34bd"
+    },
+    "mark": "existing pinned public/assets/mithril-mark.svg unchanged",
+    "wordmark": "exact canonical MithrilWordmark SVG, currentColor inherited without image inversion"
+  },
+  "social": {
+    "path": "/assets/cs-social-2b35b5fab8c5.png",
+    "key": "public-assets/cs-social/2b35b5fab8c5471f3103802d5a1f6fbca649d4dff3101947626b2cecc77a3a80.png",
+    "sha256": "2b35b5fab8c5471f3103802d5a1f6fbca649d4dff3101947626b2cecc77a3a80",
+    "bytes": 51093,
+    "width": 1200,
+    "height": 630,
+    "sourceSvgSha256": "35c9dd2fe5ebe7b663e9adb415292ae610792bf8f36e5140eaf2986e9e7e24c5"
+  }
 }
