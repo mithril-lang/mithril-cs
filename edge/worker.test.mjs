@@ -159,3 +159,16 @@ test("pausing a target fences a late response and preserves the original receipt
  assert.equal((await f.request("/api/findings")).value.findings.length,0);
  assert.equal((await f.request("/api/targets")).value.targets[0].version,t.version+1);
 });
+
+test("public social assets never expose evidence keys or authenticated page metadata",async()=>{
+ const {social}=await import("./branding.mjs"),f=fixture();const reads=[];
+ f.env.EVIDENCE.get=async key=>{reads.push(key);return key===social.key?{body:new Uint8Array([137,80,78,71])}:null;};
+ const home=await f.request("/?lang=ja");assert.match(home.value,/property="og:image"/);assert.ok(home.value.includes(social.path));
+ assert.match(home.value,/class="brand-wordmark"/);assert.doesNotMatch(home.value,/filter:invert/);
+ const app=await f.request("/app/targets");assert.match(app.value,/noindex,nofollow,noarchive/);assert.doesNotMatch(app.value,/property="og:image"/);
+ const get=await worker.fetch(new Request(ORIGIN+social.path),f.env,{});assert.equal(get.status,200);assert.equal(get.headers.get("content-type"),"image/png");assert.equal((await get.arrayBuffer()).byteLength,4);assert.deepEqual(reads,[social.key]);
+ const head=await worker.fetch(new Request(ORIGIN+social.path,{method:"HEAD"}),f.env,{});assert.equal(head.status,200);assert.equal((await head.arrayBuffer()).byteLength,0);
+ reads.length=0;for(const path of ["/assets/not-a-social.png","/public-assets/private/report.json","/qualification/2206-reauth-20261114.json"]){assert.equal((await f.request(path)).response.status,404);}assert.deepEqual(reads,[]);
+ assert.match((await f.request("/robots.txt")).value,/Disallow: \/app/);const xml=(await f.request("/sitemap.xml")).value;assert.match(xml,/<urlset/);assert.doesNotMatch(xml,/undefined|\/app|\/api/);
+ assert.equal(f.fetches.length,0);assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM cs_runs").get().n,0);
+});

@@ -1,5 +1,6 @@
 import engine from "./engine.mjs";
-import {page, css, client, logo} from "./ui.mjs";
+import {page, css, client, logo, sitemap} from "./ui.mjs";
+import {social} from "./branding.mjs";
 const ORIGIN="https://cs.mithril.fund";
 const UUID=/^[a-f0-9-]{36}$/i;
 const SAFE_HEADERS=["content-type","content-length","strict-transport-security","x-content-type-options","content-security-policy","referrer-policy","x-frame-options"];
@@ -255,6 +256,15 @@ export default {async fetch(req,env,ctx){
   const u=new URL(req.url);if(u.origin!==ORIGIN)fail(421,"host_not_allowed");
   if(u.pathname.startsWith("/api/"))return secure(await api(req,env,ctx),true);
   if(!["GET","HEAD"].includes(req.method))fail(405,"method_not_allowed");
+  if(u.pathname==="/robots.txt"||u.pathname==="/sitemap.xml"){
+   const robots=u.pathname==="/robots.txt";
+   return secure(new Response(req.method==="HEAD"?null:robots?"User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /app\nSitemap: https://cs.mithril.fund/sitemap.xml\n":sitemap(),{headers:{"content-type":robots?"text/plain; charset=utf-8":"application/xml; charset=utf-8","cache-control":"public, max-age=300"}}));
+  }
+  if(u.pathname===social.path){
+   const object=await env.EVIDENCE.get(social.key);
+   if(!object)return secure(new Response("Image unavailable",{status:503,headers:{"cache-control":"no-store"}}));
+   return secure(new Response(req.method==="HEAD"?null:object.body,{headers:{"content-type":"image/png","content-length":String(social.bytes),"cache-control":"public, max-age=31536000, immutable","etag":'"'+social.sha256+'"'}}));
+  }
   const asset=u.pathname==="/app.js"?[client,"text/javascript; charset=utf-8"]:u.pathname==="/style.css"?[css,"text/css; charset=utf-8"]:u.pathname==="/mithril.svg"?[logo,"image/svg+xml"]:null;
   if(asset)return secure(new Response(req.method==="HEAD"?null:asset[0],{headers:{"content-type":asset[1],"cache-control":"public, max-age=300"}}));
   const html=page(u);if(html===null)return secure(new Response("Page not found",{status:404}));
