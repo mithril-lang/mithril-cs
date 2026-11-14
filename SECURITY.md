@@ -1,6 +1,8 @@
 # Security policy
 
-This pre-release engine supports credential-free, read-only lexical review of an authorized quiescent local source folder. It is not a sandbox against hostile concurrent filesystem writers. It does not evaluate files, install target dependencies, issue network requests, invoke models or apply patches.
+The core pre-release engine supports credential-free, read-only lexical review of an authorized quiescent local source folder. It is not a sandbox against hostile concurrent filesystem writers. It does not evaluate files, install target dependencies, issue network requests, invoke models or apply patches.
+
+The separate owned scanner adapter supports explicitly authorized, bounded passive GET requests. It rechecks the written grant per request, refuses redirects, and retains its 15-second/1 MiB limits. It uses Babashka and Python standard library without Kotoba. Header omissions and HTTP lexical references are review candidates, not exploit confirmation. Namespace identifiers are excluded; unresolved dynamic references remain visible. Deduplicated review groups retain all original occurrences. Anonymous HTTP review does not validate authenticated administration or active pentesting.
 
 Never point it at secrets, regulated data or customer material without the required authority. Paths and digests in stdout can be sensitive. Retain generated reports only in the approved private evidence destination, after account/access/retention/redaction and read-back are verified.
 

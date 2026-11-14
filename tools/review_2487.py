@@ -23,7 +23,7 @@ class Resources(html.parser.HTMLParser):
   a=dict(attrs)
   for k,v in attrs:
    if v and k.startswith("xmlns"):self.namespaces.append(v)
-  fields={"script":["src"],"img":["src","srcset"],"iframe":["src"],"source":["src","srcset"],"video":["src","poster"],"audio":["src"],"object":["data"],"embed":["src"]}
+  fields={"script":["src"],"img":["src","srcset"],"iframe":["src"],"source":["src","srcset"],"video":["src","poster"],"audio":["src"],"object":["data"],"embed":["src"],"image":["href","xlink:href"],"use":["href","xlink:href"]}
   if tag=="link" and any(x in a.get("rel","").lower().split() for x in ["stylesheet","preload","modulepreload","icon"]):fields[tag]=["href"]
   for k in fields.get(tag,[]):
    if a.get(k):self.fetches.append(a[k])
@@ -50,6 +50,11 @@ def context_and_disposition(url,response,finding):
   resources=[x for x in parser.fetches if re.search(r"(?i)^http://",x)]
   if "css" in ctype:resources+=re.findall(r"(?i)(?:url\(\s*[\"']?|@import\s+[\"'])(http://[^\"'\s)]+)",body)
   if not resources:
+   stripped=re.sub(r"""(?i)\\s+xmlns(?::[A-Za-z0-9_-]+)?\\s*=\\s*["'][^"']*["']""","",body)
+   # JavaScript, navigation and unsupported dynamic references remain uncertain.
+   if re.search(r"(?i)http://[A-Za-z0-9]",stripped):
+    result.update(root_control="mixed-content",reason="HTTP reference retained; execution/navigation context requires browser validation")
+    return result
    result.update(disposition="suppressed",survives="no",confidence="high",
     root_control="mixed-content",reason="HTTP lexical match is not a fetch-bearing resource reference in this response",
     context={"xmlns":parser.namespaces[:8],"matched_prefix":evidence})
@@ -147,6 +152,7 @@ def main():
   trace_rows=[json.loads(x) for x in trace_raw.splitlines()]
   for row in rows:
    row["response"]["url"]=safeurl(row["response"]["url"])
+   row["discovered"]=list(map(safeurl,row["discovered"]))
   for row in trace_rows:
    if "url" in row:row["url"]=safeurl(row["url"])
   stats={"original_report_sha256":original_sha,"matches_historical_report":original_sha==ORIGINAL_REPORT_SHA,
