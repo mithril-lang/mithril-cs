@@ -1,7 +1,7 @@
 export function pricingPage({ja,locale,pentest}) {
  const t=(en,jp)=>ja?jp:en;
  const query='?lang='+encodeURIComponent(locale);
- const contact='https://mithril.fund/support/contact';
+ const contact='https://mithril.fund/support/contact'+query;
  const cards=pentest?[
   {name:'Pentest',price:'$100–300',unit:t('/ test','／回'),desc:t('Focused testing for your apps, APIs and repositories.','アプリ・API・リポジトリを、必要な範囲で検査。'),features:[t('Defined targets and test scope','検査対象・スコープの設定'),t('Findings with supporting evidence','根拠付きの検出結果'),t('Risk review and prioritization','リスクの確認・優先順位付け'),t('Fix proposals and retest workflow','修正案と再検査のワークフロー')],cta:t('Request a pentest','検査を申し込む'),href:contact},
   {name:'Full Audit',price:t('From $2,000','$2,000〜'),unit:t('/ audit','／監査'),desc:t('A deeper engagement with a report your team can act on.','対象を深く調査し、改善に使えるレポートを提供。'),features:[t('Custom scope and test plan','個別スコープ・検査計画'),t('Application and API review','アプリケーション・APIの検査'),t('Risk assessment and remediation priorities','リスク評価と修正の優先順位'),t('Report and remediation review','レポートと改善内容のレビュー')],cta:t('Request a quote','見積もりを依頼'),href:contact},
