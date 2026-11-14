@@ -21,4 +21,4 @@
   (is (edge/allowed-transition? "running" "cancelled"))
   (is (edge/allowed-transition? "running" "partial"))
   (doseq [pair [["cancelled" "partial"] ["failed" "running"] ["rejected" "approved"] ["running" "complete"]]]
-    (is (not (apply edge/allowed-transition? pair))))))
+    (is (not (apply edge/allowed-transition? pair)))))
