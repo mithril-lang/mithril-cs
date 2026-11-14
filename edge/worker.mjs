@@ -89,9 +89,9 @@ async function publicAddresses(host){
  const addresses=lists.flat();if(!addresses.length)fail(409,"dns_unavailable");
  // Fail closed to known public Cloudflare ranges for the initial company pilot.
  for(const ip of addresses){
-  if(ip.includes(":")){if(!/^(2606:4700:|2803:f800:|2400:cb00:|2a06:98c[01]:|2405:(?:8100|b500):)/i.test(ip))fail(409,"unqualified_destination");}
+  if(ip.includes(":")){if(!/^(2606:4700:|2803:f800:|2400:cb00:|2a06:98c[0-7]:|2405:(?:8100|b500):)/i.test(ip))fail(409,"unqualified_destination");}
   else {const a=ip.split(".").map(Number);if(a.length!==4||a.some(x=>!Number.isInteger(x)||x<0||x>255)||
-   !((a[0]===104&&a[1]>=16&&a[1]<=31)||(a[0]===172&&a[1]>=64&&a[1]<=71)||(a[0]===188&&a[1]===114&&(a[2]===96||a[2]===97))||(a[0]===162&&a[1]===159)))fail(409,"unqualified_destination");}
+   !((a[0]===104&&a[1]>=16&&a[1]<=27)||(a[0]===172&&a[1]>=64&&a[1]<=71)||(a[0]===188&&a[1]===114&&(a[2]===96||a[2]===97))||(a[0]===162&&a[1]===159)))fail(409,"unqualified_destination");}
  }
  return addresses;
 }

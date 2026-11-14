@@ -62,6 +62,7 @@ function fixture(){
 }
 test("actual compiled portable rules keep partial coverage and framing alternatives",()=>{
  const result=engine.assess({url:"https://example.test/",status:200,headers:{"content-type":"text/html"},"body-complete":false});
+ assert.equal(engine.limits["max-pages"],1);assert.equal(engine.limits["response-bytes"],1048576);assert.equal(engine.limits["run-deadline-ms"],25000);
  assert.equal(result.findings.length,5);assert.equal(result.coverage.status,"partial");assert.equal(result.coverage["body-complete"],false);
  assert.equal(engine.transition("cancelled","partial"),false);assert.equal(engine.transition("approved","exported"),true);
 });

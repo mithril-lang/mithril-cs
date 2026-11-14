@@ -232,8 +232,8 @@ def main():
         for key in ["cpu", "memory", "fs"]:
             age = time.time() - datetime.datetime.fromisoformat(s[key]["time"].replace("Z", "+00:00")).timestamp()
             need(-5 <= age <= 30, "stale metrics")
-        credit=owned_memory_credit(summary,own_metric_uid,time.time()) if args.edge_console and own_metric_uid else 0
         required=(6 if (args.all_runtimes or args.zap) else (5.5 if args.additional_slot else 5))*GIB
+        credit=owned_memory_credit(summary,own_metric_uid,time.time()) if args.edge_console and own_metric_uid and s["memory"]["availableBytes"]<required else 0
         need(s["memory"]["availableBytes"]+credit >= required and s["fs"]["availableBytes"] >= 48 * GIB, "headroom hold")
         if args.edge_console:
             measured["samples"]+=1

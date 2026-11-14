@@ -8,10 +8,10 @@ export const css="/* Jun's selected CS themes: Grid dark / Porcelain light. Shar
 `;
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function inline(text){
- return esc(text).replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+|\\/[^\\s)]+)\\)/g,(_,label,href)=>'<a href="'+(href.startsWith("/")?"https://blog.mithril.fund"+href:href)+'" rel="noopener noreferrer">'+label+'</a>').replace(/\\*\\*([^*]+)\\*\\*/g,"<strong>$1</strong>");
+ return esc(text).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/g,(_,label,href)=>'<a href="'+(href.startsWith("/")?"https://blog.mithril.fund"+href:href)+'" rel="noopener noreferrer">'+label+'</a>').replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
 }
 function markdown(block){
- return block.split(/\\n\\n+/).map(s=>s.startsWith("## ")?'<h2>'+inline(s.slice(3))+'</h2>':s.startsWith("### ")?'<h3>'+inline(s.slice(4))+'</h3>':'<p>'+inline(s).replace(/\\n/g,"<br>")+'</p>').join("");
+ return block.split(/\n\n+/).map(s=>s.startsWith("## ")?'<h2>'+inline(s.slice(3))+'</h2>':s.startsWith("### ")?'<h3>'+inline(s.slice(4))+'</h3>':'<p>'+inline(s).replace(/\n/g,"<br>")+'</p>').join("");
 }
 export function page(url){
  const locale=locales.includes(url.searchParams.get("lang"))?url.searchParams.get("lang"):"en",ja=locale==="ja";
@@ -42,7 +42,7 @@ export function page(url){
   const article=articles.find(x=>p==="/blog/"+x.slug);if(!article)return null;
   title=ja&&article.titleJa?article.titleJa:article.titleEn;
   const translated=ja&&article.bodyJa?.length;
-  body=\`<article class="cs-reading cs-article-body" lang="\${translated?"ja":"en"}"><a href="/blog\${query}">← \${tr("All articles","記事一覧")}</a><p class="cs-eyebrow">\${esc(article.date)}</p><h1>\${esc(title)}</h1>\${!translated&&ja?'<p class="notice">この記事の本文は英語です。</p>':""}<p class="cs-lead">\${esc(translated?article.summaryJa:article.summaryEn)}</p>\${(translated?article.bodyJa:article.bodyEn).map(markdown).join("")}</article>\`;
+  body=`<article class="cs-reading cs-article-body" lang="${translated?"ja":"en"}"><a href="/blog${query}">← ${tr("All articles","記事一覧")}</a><p class="cs-eyebrow">${esc(article.date)}</p><h1>${esc(title)}</h1>${!translated&&ja?'<p class="notice">この記事の本文は英語です。</p>':""}<p class="cs-lead">${esc(translated?article.summaryJa:article.summaryEn)}</p>${(translated?article.bodyJa:article.bodyEn).map(markdown).join("")}</article>`;
  }else if(p==="/blog"){
   title=tr("Security notes.","セキュリティノート。");
   body=`<section class="cs-hero"><p class="cs-eyebrow">BLOG</p><h1>${title}</h1><p class="cs-lead">${tr("Practical guidance from Mithril's security library.","Mithrilのセキュリティライブラリから、実務に役立つ情報を紹介します。")}</p></section><section class="cs-reading">${articles.map(article=>`<article class="cs-article-card"><p class="cs-eyebrow">${esc(article.date)}</p><h2><a href="/blog/${esc(article.slug)}${query}">${esc(ja&&article.titleJa?article.titleJa:article.titleEn)}</a></h2><p class="muted" lang="en">${esc(article.summaryEn)}</p>${ja&&!article.titleJa?'<p class="muted">本文は英語です。</p>':""}</article>`).join("")}</section>`;

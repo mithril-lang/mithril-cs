@@ -11,7 +11,8 @@
  "r2_buckets":[{"binding":"EVIDENCE","bucket_name":"mithril-cs-evidence"}],
  "vars":{"ALLOWED_HOSTS":"mithril.fund,cs.mithril.fund","SOURCE_SHA":"SET_BY_SOURCE_BOUND_PUBLISHER"},
  "observability":{"enabled":true,"head_sampling_rate":0.1,"logs":{"enabled":true,"invocation_logs":false},"traces":{"enabled":false}},
- // D1 binding CS_DB is supplied with the source-bound dedicated database ID at publication.
+ "d1_databases":[{"binding":"DB","database_name":"mithril-cs","database_id":"6c6ab7e5-271d-41c6-a29f-919da38b8cf3"}],
+ // Dedicated product state only; existing identity and Project authorities stay behind services.
  // No production auth identity database is writable through this Worker.
  "limits":{"cpu_ms":500}
 }
