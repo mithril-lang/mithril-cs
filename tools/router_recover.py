@@ -3,7 +3,8 @@ Prepare creates only immutable source/config and a private state backup. Execute
 requires the exact journal and tested init digest; old writer is fenced before
 same-holder lease/pin reconciliation. Unknown mutations retain the physical slot.
 """
-import argparse, base64, copy, datetime, hashlib, json, re, socket, ssl, subprocess, sys, time, unittest, uuid
+import argparse, base64, contextlib, copy, datetime, hashlib, io, json, re, socket, ssl, subprocess, sys, time, unittest, uuid
+from unittest.mock import patch
 
 NS="mithril-ci-router"
 LNS="mithril-ci-control"
@@ -33,8 +34,13 @@ def state_proof(secret, policy):
 def diagnostic_source(source):
     old="print('RESIDENT_OWNER_HOLD '+type(error).__name__,file=sys.stderr,flush=True)"
     new="print('RESIDENT_OWNER_HOLD '+json.dumps(failure_metadata(error),sort_keys=True,separators=(',',':')),file=sys.stderr,flush=True)"
-    need(source.count(old)==1 and 'def failure_metadata(' not in source,'diagnostic source drift')
     helper="def failure_metadata(error):\n # Source locations only: never exception messages, locals or response bodies.\n frames=[];tb=error.__traceback__\n while tb is not None:\n  name=Path(tb.tb_frame.f_code.co_filename).name\n  if re.fullmatch('[a-z_]+\\.py',name):\n   frames.append({'source':name,'function':tb.tb_frame.f_code.co_name,'line':tb.tb_lineno})\n  tb=tb.tb_next\n return {'class':type(error).__name__,'module':type(error).__module__,'frames':frames[-12:]}\n\n"
+    if source.count(helper)==1 and source.count(new)==1 and old not in source:
+        original=source.replace(helper,'',1).replace(new,old,1)
+        need(original.count('def main():')==1 and 'def failure_metadata(' not in original,'diagnostic source drift')
+        need(original.replace('def main():',helper+'def main():',1).replace(old,new,1)==source,'diagnostic source drift')
+        return source
+    need(source.count(old)==1 and source.count('def main():')==1 and 'def failure_metadata(' not in source and new not in source,'diagnostic source drift')
     return source.replace('def main():',helper+'def main():').replace(old,new)
 
 def plan_spec(pod, policy, op):
@@ -98,6 +104,12 @@ class Operator:
         reread=self.get(obj["kind"],obj["metadata"]["name"],obj["metadata"].get("namespace",NS))
         need(actual["metadata"]["uid"]==reread["metadata"]["uid"],"create outcome unknown")
         return reread
+    def ensure_code(self,name,data):
+        existing=self.get("ConfigMap",name,NS,True)
+        if existing is None:
+            existing=self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":name,"namespace":NS},"immutable":True,"data":data})
+        need(existing.get("immutable") is True and existing.get("data")==data and not existing.get("binaryData") and not existing["metadata"].get("deletionTimestamp"),"existing code differs or is mutable")
+        return existing
     def save(self,journal,phase,**values):
         old=self.get("ConfigMap",journal)
         data=json.loads(old["data"]["plan"])
@@ -188,7 +200,7 @@ class Operator:
         need(b.get("immutable") is True and digest(b["data"])==proof["data_sha256"],"backup verification")
         need(state_proof(self.get("Secret","router-state-persistent-v1"),old)==proof,"state changed before freeze")
         plan["backup"]={"name":backup_name,"uid":b["metadata"]["uid"],"data_sha256":proof["data_sha256"]}
-        self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":code_name,"namespace":NS},"immutable":True,"data":source_data})
+        self.ensure_code(code_name,source_data)
         self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":policy_name,"namespace":NS},"immutable":True,"data":{"policy.json":raw}})
         self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":pin_name,"namespace":NS},"immutable":True,"data":{"policy_sha256":policy_sha}})
         self.create({"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":journal,"namespace":NS},"data":{"plan":json.dumps(plan,sort_keys=True,separators=(",",":"))}})
@@ -318,7 +330,55 @@ class Contracts(unittest.TestCase):
         except Exception as e:result=ns['failure_metadata'](e)
         self.assertNotIn('CREDENTIAL_SENTINEL',json.dumps(result))
         self.assertEqual(result['class'],'RuntimeError')
-        with self.assertRaises(RuntimeError):diagnostic_source(updated)
+        self.assertEqual(diagnostic_source(updated),updated)
+        with self.assertRaises(RuntimeError):diagnostic_source(updated.replace('frames[-12:]','frames[-13:]'))
+        with self.assertRaises(RuntimeError):diagnostic_source(updated+'\ndef failure_metadata(error): pass\n')
+    def test_existing_code_is_reused_only_if_exact_and_immutable(self):
+        class Fake(Operator):
+            def __init__(self,obj):self.obj=obj
+            def get(self,*args):return self.obj
+            def create(self,obj):self.obj=obj;return obj
+        data={'resident_owner_entrypoint.py':'source'}
+        op=Fake(None); first=op.ensure_code('source-name',data)
+        self.assertIs(op.ensure_code('source-name',data),first)
+        for change in ({'immutable':False},{'data':{'resident_owner_entrypoint.py':'other'}},{'binaryData':{'extra':'YQ=='}}):
+            altered=copy.deepcopy(first);altered.update(change)
+            with self.assertRaises(RuntimeError):Fake(altered).ensure_code('source-name',data)
+        class Unknown(Fake):
+            def create(self,obj):
+                self.obj=obj
+                raise RuntimeError('create outcome unknown')
+        with self.assertRaisesRegex(RuntimeError,'outcome unknown'):Unknown(None).ensure_code('source-name',data)
+    def test_prepare_again_with_installed_diagnostics(self):
+        source="def main():\n try: pass\n except Exception as error:\n  print('RESIDENT_OWNER_HOLD '+type(error).__name__,file=sys.stderr,flush=True)\n"
+        data={'resident_owner_entrypoint.py':diagnostic_source(source)}
+        files={n:hashlib.sha256(v.encode()).hexdigest() for n,v in data.items()}
+        source_sha=digest(files); code_name='router-resident-code-'+source_sha[:16]
+        pod,p=self.fixture()
+        pod['spec']['volumes'].append({'name':'owner-code','configMap':{'name':code_name}})
+        pod['spec']['containers'][1]['env'].append({'name':'OWNER_SOURCE_SHA256','value':source_sha})
+        p.update(pod_spec_sha256=digest(pod['spec']),source_files=files,source_sha256=source_sha,controller_uid='controller',pod_name=POD)
+        initialized,p,_,_=plan_spec(pod,p,'c'*32)
+        pod={'metadata':{'uid':'pod'},'spec':initialized}
+        policy_name=next(v['configMap']['name'] for v in initialized['volumes'] if v['name']=='resident-policy')
+        state={'metadata':{'name':'router-state-persistent-v1','namespace':NS,'uid':'state','resourceVersion':'1','annotations':{PREFIX+'router-device-id':'d',PREFIX+'router-node-id':'1',PREFIX+'router-ipv4':'100.1.2.3'}},'data':{'x':'synthetic'}}
+        tini=b'fixture-tini'
+        class Fake(Operator):
+            def __init__(self):
+                self.args=argparse.Namespace(expected_pod_uid='pod',source='fixture')
+                self.objects={('Pod',POD):pod,('StatefulSet',STS):{'metadata':{'uid':'controller'},'spec':{'replicas':1,'template':{'spec':initialized}}},('ConfigMap',policy_name):{'data':{'policy.json':json.dumps(p)}},('ConfigMap',code_name):{'metadata':{'uid':'code'},'immutable':True,'data':data},('ConfigMap',ARTIFACT):{'immutable':True,'binaryData':{'tini':base64.b64encode(tini).decode()}},('Secret','router-state-persistent-v1'):state}
+            def get(self,kind,name,ns=NS,absent=False):return copy.deepcopy(self.objects.get((kind,name)))
+            def create(self,obj):
+                key=(obj['kind'],obj['metadata']['name']);need(key not in self.objects,'object exists')
+                obj=copy.deepcopy(obj);obj['metadata']['uid']='fixture-'+str(len(self.objects));self.objects[key]=obj;return copy.deepcopy(obj)
+            def call(self,*args):return {'kind':'NodeList','metadata':{},'items':[{'metadata':{'name':str(i),'uid':str(i)}} for i in range(4)]}
+        op=Fake()
+        with patch.object(sys.modules[__name__],'TINI_SHA',hashlib.sha256(tini).hexdigest()), contextlib.redirect_stdout(io.StringIO()):op.prepare()
+        plans=[json.loads(v['data']['plan']) for (kind,name),v in op.objects.items() if kind=='ConfigMap' and name.startswith('router-recovery-') and 'plan' in v.get('data',{})]
+        self.assertEqual(len(plans),1)
+        self.assertEqual(plans[0]['new_policy']['source_sha256'],source_sha)
+        self.assertEqual(op.objects[('ConfigMap',code_name)]['data'],data)
+        self.assertEqual(plans[0]['phase'],'prepared')
     def test_new_source_binding_only_after_fencing(self):
         _,p=self.fixture();lease={"metadata":{"uid":"lease","resourceVersion":"1","annotations":{PREFIX+"source-sha256":"b"*64,PREFIX+"pin-sha256":"e"*64,PREFIX+"node-uid":"node",PREFIX+"operation":"a"*32}},"spec":{"holderIdentity":"a"*32}}
         patch=lease_recovery_patch(lease,p,"d"*64,fenced=True,expected_pin="e"*64,new_source="f"*64)
@@ -350,7 +410,7 @@ def main():
     if "--selftest" in sys.argv:
         suite=unittest.defaultTestLoader.loadTestsFromTestCase(Contracts)
         result=unittest.TextTestRunner(verbosity=2).run(suite)
-        raise SystemExit(0 if result.wasSuccessful() and result.testsRun==9 else 1)
+        raise SystemExit(0 if result.wasSuccessful() and result.testsRun==11 else 1)
     parser=argparse.ArgumentParser()
     parser.add_argument("action",choices=["prepare","execute","commit"])
     parser.add_argument("--kubeconfig",required=True);parser.add_argument("--source",required=True)
